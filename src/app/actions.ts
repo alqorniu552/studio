@@ -17,8 +17,8 @@ export async function startFloodAttack(
   method: string,
   headersString?: string,
   body?: string,
-  concurrency?: number, // Made optional for now, will default if not provided
-  rate?: number // Made optional for now, will default if not provided
+  concurrency?: number,
+  rate?: number
 ): Promise<FloodStats> {
   let parsedUrl: URL;
   try {
@@ -31,8 +31,8 @@ export async function startFloodAttack(
      return { totalSent: 0, successful: 0, failed: 0, error: "Target URL must use http or https protocol." };
   }
   
-  const safeConcurrency = Math.min(concurrency ?? 10, 100); // Default to 10 if not provided
-  const safeRate = Math.min(rate ?? 10, 100); // Default to 10 if not provided
+  const safeConcurrency = Math.min(concurrency ?? 10, 100); 
+  const safeRate = Math.min(rate ?? 10, 100);
 
 
   if (safeConcurrency <= 0 || safeRate <= 0) {
@@ -41,7 +41,7 @@ export async function startFloodAttack(
 
   const parsedHeaders: HeadersInit = {};
   if (headersString) {
-    headersString.split('\\n').forEach(line => {
+    headersString.split('\n').forEach(line => {
       const parts = line.split(':');
       if (parts.length >= 2) {
         const key = parts[0].trim();
@@ -56,21 +56,20 @@ export async function startFloodAttack(
   const fetchOptions: RequestInit = {
     method: method.toUpperCase(),
     headers: parsedHeaders,
-    signal: AbortSignal.timeout(5000) // Timeout for each request
+    signal: AbortSignal.timeout(5000) 
   };
 
   if (body && !METHODS_WITHOUT_BODY.includes(method.toUpperCase())) {
     fetchOptions.body = body;
-    // Ensure Content-Type is set if body is present and not already specified
+    
     if (!parsedHeaders['Content-Type'] && !parsedHeaders['content-type']) {
-        // Attempt to guess content type, default to application/json for non-empty body
         try {
             JSON.parse(body);
             parsedHeaders['Content-Type'] = 'application/json';
         } catch (e) {
             parsedHeaders['Content-Type'] = 'text/plain';
         }
-        fetchOptions.headers = parsedHeaders; // Re-assign headers if Content-Type was added
+        fetchOptions.headers = parsedHeaders; 
     }
   }
 
@@ -132,3 +131,4 @@ export async function startFloodAttack(
 
   return { totalSent, successful, failed };
 }
+

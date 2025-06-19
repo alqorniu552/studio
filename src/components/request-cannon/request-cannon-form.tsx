@@ -2,7 +2,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,12 +33,12 @@ import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, F
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
 const formSchema = z.object({
-  targetUrl: z.string().url({ message: "Please enter a valid URL." }),
+  targetUrl: z.string().url({ message: "Please enter a valid URL (e.g., http://example.com or https://example.com)." }),
   method: z.enum(HTTP_METHODS).default("GET"),
   headers: z.string().optional(),
   body: z.string().optional(),
-  concurrency: z.coerce.number().int().min(1, "Min 1").max(100, "Max 100"),
-  rate: z.coerce.number().int().min(1, "Min 1").max(100, "Max 100"),
+  concurrency: z.coerce.number().int().min(1, "Min 1").max(100, "Max 100").default(10),
+  rate: z.coerce.number().int().min(1, "Min 1").max(100, "Max 100").default(10),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -67,11 +67,16 @@ export function RequestCannonForm() {
   const selectedMethod = form.watch("method");
 
   const onSubmit = (values: FormValues) => {
-    if (isFlooding) {
-      setIsFlooding(false);
-      toast({ title: "Flood Stoped", description: "The attack has been requested to stop." });
+    // This part of the logic for stopping is client-side only.
+    // The server-side attack runs for a fixed duration.
+    if (isFlooding && isPending) { 
+      // User clicked "Stop Attack" while it was running (but button is disabled during isPending)
+      // This branch is unlikely to be hit if button is disabled by isPending
+      toast({ title: "Flood Stop Requested", description: "The attack will complete its current duration on the server." });
+      // setIsFlooding(false); // Let the finally block of startTransition handle this
       return;
     }
+
 
     setIsFlooding(true);
     setStats(null);
@@ -92,7 +97,7 @@ export function RequestCannonForm() {
           setCurrentError(result.error);
           toast({ variant: "destructive", title: "Flood Error", description: result.error });
         } else {
-          toast({ title: "Flood Completed", description: `Sent ${result.totalSent} requests.` });
+          toast({ title: "Flood Completed", description: `Sent ${result.totalSent} requests. Successful: ${result.successful}, Failed: ${result.failed}.` });
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
@@ -100,10 +105,12 @@ export function RequestCannonForm() {
         setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage });
         toast({ variant: "destructive", title: "Failed to Start Flood", description: errorMessage });
       } finally {
-         setIsFlooding(false);
+         setIsFlooding(false); 
       }
     });
   };
+
+  const isAttackRunning = isPending; // isPending is true while the server action is executing
 
   return (
     <Form {...form}>
@@ -115,7 +122,7 @@ export function RequestCannonForm() {
             <FormItem>
               <FormLabel className="flex items-center"><Target className="mr-2 h-4 w-4" />Target URL</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com" {...field} disabled={isFlooding || isPending} />
+                <Input placeholder="https://example.com" {...field} disabled={isAttackRunning} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -128,7 +135,7 @@ export function RequestCannonForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel className="flex items-center"><ArrowRightLeft className="mr-2 h-4 w-4" />HTTP Method</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isFlooding || isPending}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAttackRunning}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select an HTTP method" />
@@ -156,7 +163,7 @@ export function RequestCannonForm() {
                   placeholder="Content-Type: application/json\nAuthorization: Bearer token"
                   className="resize-y"
                   {...field}
-                  disabled={isFlooding || isPending}
+                  disabled={isAttackRunning}
                 />
               </FormControl>
               <FormDescription>
@@ -173,13 +180,13 @@ export function RequestCannonForm() {
             name="body"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Request Body (Optional)</FormLabel>
+                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Request Body (Optional for {selectedMethod})</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder='{"key": "value"}'
                     className="resize-y"
                     {...field}
-                    disabled={isFlooding || isPending}
+                    disabled={isAttackRunning}
                   />
                 </FormControl>
                 <FormMessage />
@@ -201,7 +208,7 @@ export function RequestCannonForm() {
                   max={100}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isFlooding || isPending}
+                  disabled={isAttackRunning}
                   aria-label="Concurrent Requests"
                   {...restField}
                 />
@@ -224,7 +231,7 @@ export function RequestCannonForm() {
                   max={100}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isFlooding || isPending}
+                  disabled={isAttackRunning}
                   aria-label="Request Rate"
                   {...restField}
                 />
@@ -237,23 +244,24 @@ export function RequestCannonForm() {
         <Button 
           type="submit" 
           className="w-full" 
-          disabled={isPending}
-          variant={isFlooding || isPending ? "destructive" : "default"}
+          disabled={isAttackRunning} // Button is disabled while attack is running
+          variant={isAttackRunning ? "destructive" : "default"}
         >
-          {isFlooding || isPending ? <StopCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-          {isFlooding || isPending ? "Stop Attack" : "Start Attack"}
+          {isAttackRunning ? <StopCircle className="mr-2 h-4 w-4 animate-pulse" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+          {isAttackRunning ? "Attack in Progress..." : "Start Attack"}
         </Button>
       </form>
 
-      {(isFlooding || isPending || stats || currentError) && (
+      {(isFlooding || isPending || stats || currentError) && ( // Show progress if transitioning, or if there are stats/errors
         <div className="mt-8">
           <ProgressDisplay
-            isLoading={isFlooding || isPending}
+            isLoading={isPending} //isLoading should primarily depend on isPending
             stats={stats}
-            error={currentError}
+            error={currentError} // This will be result.error if server action returns an error
           />
         </div>
       )}
     </Form>
   );
 }
+
