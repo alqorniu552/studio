@@ -59,6 +59,7 @@ export default function AdminDashboardPage() {
   const [isAttacking, setIsAttacking] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [manualAttackHistory, setManualAttackHistory] = useState<AttackHistoryEntry[]>([]);
+  const [totalManualAttacks, setTotalManualAttacks] = useState(0);
 
   useEffect(() => {
     // Load manual attack history from localStorage
@@ -68,6 +69,7 @@ export default function AdminDashboardPage() {
         const parsedHistory = JSON.parse(storedHistory);
         if (Array.isArray(parsedHistory)) {
           setManualAttackHistory(parsedHistory);
+          setTotalManualAttacks(parsedHistory.length);
         }
       } catch (e) {
         console.error("Failed to parse attack history from localStorage:", e);
@@ -208,16 +210,15 @@ export default function AdminDashboardPage() {
       </p>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Existing summary cards - These are still example/static */}
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Serangan (Contoh)</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Serangan Manual (Lokal)</CardTitle>
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
+            <div className="text-2xl font-bold">{totalManualAttacks.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              +20.1% dari bulan lalu
+              Dari riwayat penyimpanan peramban.
             </p>
           </CardContent>
         </Card>
@@ -404,4 +405,6 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+    
+
     
