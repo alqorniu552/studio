@@ -11,9 +11,9 @@ export default function Home() {
           <div className="flex items-center justify-center mb-4">
             <Rocket className="h-12 w-12 text-primary" />
           </div>
-          <CardTitle className="text-3xl font-headline text-primary">Request Cannon</CardTitle>
+          <CardTitle className="text-3xl font-headline text-primary">Meriam Permintaan</CardTitle>
           <CardDescription className="text-muted-foreground">
-            Configure and launch Layer 7 (HTTP) flood attacks. Use responsibly.
+            Konfigurasi dan luncurkan serangan banjir Layer 7 (HTTP). Gunakan secara bertanggung jawab.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -21,9 +21,8 @@ export default function Home() {
         </CardContent>
       </Card>
       <footer className="mt-8 text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Request Cannon. For educational purposes only.</p>
+        <p>&copy; {new Date().getFullYear()} Meriam Permintaan. Hanya untuk tujuan edukasi.</p>
       </footer>
     </main>
   );
 }
-

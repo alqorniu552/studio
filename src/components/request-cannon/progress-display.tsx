@@ -15,14 +15,14 @@ interface ProgressDisplayProps {
 }
 
 const renderStatusCodeLabel = (code: number): string => {
-  if (code === 0) return "Timeout/Abort";
-  if (code === -1) return "Network/Proxy Err";
+  if (code === 0) return "Waktu Habis/Batal";
+  if (code === -1) return "Kesalahan Jaringan/Proxy";
   return `HTTP ${code}`;
 };
 
 function getTargetNetworkStatusSummary(stats: FloodStats | null): { text: string; icon?: React.ElementType; colorClass?: string } {
   if (!stats || stats.totalSent === 0) {
-    return { text: "Target status unclear (no requests sent or data missing)." };
+    return { text: "Status target tidak jelas (tidak ada permintaan terkirim atau data hilang)." };
   }
 
   const { totalSent, successful, statusCodeCounts = {} } = stats;
@@ -42,21 +42,21 @@ function getTargetNetworkStatusSummary(stats: FloodStats | null): { text: string
   const serverErrorRate = totalSent > 0 ? serverErrorCount / totalSent : 0;
 
   if (criticalFailureRate > 0.7) {
-    return { text: "Target: Largely Unresponsive or Significant Network Issues", icon: WifiOff, colorClass: "text-red-500" };
+    return { text: "Target: Sebagian Besar Tidak Responsif atau Masalah Jaringan Signifikan", icon: WifiOff, colorClass: "text-red-500" };
   }
   if (serverErrorRate > 0.5) {
-    return { text: "Target: Experiencing High Server-Side Errors", icon: ServerCrash, colorClass: "text-yellow-500" };
+    return { text: "Target: Mengalami Kesalahan Sisi Server yang Tinggi", icon: ServerCrash, colorClass: "text-yellow-500" };
   }
   if (successfulRate > 0.7) {
-    return { text: "Target: Appears Responsive", icon: CheckCircle, colorClass: "text-green-500" };
+    return { text: "Target: Tampak Responsif", icon: CheckCircle, colorClass: "text-green-500" };
   }
   if (successfulRate > 0.4) {
-    return { text: "Target: Partially Responsive, Some Errors Detected", icon: AlertTriangle, colorClass: "text-yellow-600" };
+    return { text: "Target: Responsif Sebagian, Beberapa Kesalahan Terdeteksi", icon: AlertTriangle, colorClass: "text-yellow-600" };
   }
-  if (totalSent > 0) { // If some requests were sent but didn't meet above criteria
-     return { text: "Target: Significant Errors or Low Responsiveness", icon: ShieldAlert, colorClass: "text-orange-500" };
+  if (totalSent > 0) {
+     return { text: "Target: Kesalahan Signifikan atau Responsivitas Rendah", icon: ShieldAlert, colorClass: "text-orange-500" };
   }
-  return { text: "Target status indeterminate." }; // Fallback for edge cases
+  return { text: "Status target tidak dapat ditentukan." };
 }
 
 
@@ -100,7 +100,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
       <CardHeader>
         <CardTitle className="text-xl flex items-center">
           <BarChartBig className="mr-2 h-6 w-6 text-primary" />
-          Attack Status
+          Status Serangan
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -108,17 +108,17 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
           <div className="flex flex-col items-center space-y-3 text-lg text-primary">
             <div className="flex items-center">
               <Loader2 className="mr-3 h-7 w-7 animate-spin" />
-              <span className="font-semibold">Attack in progress... Please wait.</span>
+              <span className="font-semibold">Serangan sedang berlangsung... Mohon tunggu.</span>
             </div>
             {remainingTime !== null && remainingTime > 0 && (
               <div className="flex items-center text-base text-muted-foreground">
                 <TimerIcon className="mr-2 h-5 w-5" />
-                <span>Estimated time remaining: {remainingTime}s</span>
+                <span>Estimasi waktu tersisa: {remainingTime}d</span>
               </div>
             )}
             {remainingTime === 0 && (
                  <p className="text-base text-muted-foreground animate-pulse">
-                    Finalizing results...
+                    Menyelesaikan hasil...
                 </p>
             )}
           </div>
@@ -127,7 +127,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
         {!isLoading && error && (
           <div className="flex items-center text-destructive text-lg p-4 bg-destructive/10 rounded-md">
             <AlertCircle className="mr-3 h-6 w-6" />
-            <span className="font-medium">Error: {error}</span>
+            <span className="font-medium">Kesalahan: {error}</span>
           </div>
         )}
 
@@ -136,7 +136,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
             <div className="text-center mb-3">
               <p className="text-xl font-semibold text-primary flex items-center justify-center">
                 <CheckCircle className="mr-2 h-7 w-7 text-green-500" />
-                Attack Completed!
+                Serangan Selesai!
               </p>
               {targetStatusSummary && (
                 <div className={`mt-2 flex items-center justify-center text-md font-medium ${targetStatusSummary.colorClass ?? 'text-foreground'}`}>
@@ -148,17 +148,17 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
             <Separator />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
               <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow-inner">
-                <p className="text-sm text-muted-foreground">Total Sent</p>
+                <p className="text-sm text-muted-foreground">Total Terkirim</p>
                 <p className="text-2xl font-bold">{stats.totalSent.toLocaleString()}</p>
               </div>
               <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow-inner">
                  <CheckCircle className="h-5 w-5 text-green-500 mb-1" />
-                <p className="text-sm text-muted-foreground">Successful (2xx-3xx)</p>
+                <p className="text-sm text-muted-foreground">Berhasil (2xx-3xx)</p>
                 <p className="text-2xl font-bold">{stats.successful.toLocaleString()}</p>
               </div>
               <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow-inner">
                 <XCircle className="h-5 w-5 text-red-500 mb-1" />
-                <p className="text-sm text-muted-foreground">Failed/Other</p>
+                <p className="text-sm text-muted-foreground">Gagal/Lainnya</p>
                 <p className="text-2xl font-bold">{stats.failed.toLocaleString()}</p>
               </div>
             </div>
@@ -168,7 +168,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
                 <div className="space-y-2">
                   <h4 className="text-md font-semibold flex items-center text-muted-foreground">
                     <ListTree className="mr-2 h-5 w-5" />
-                    Response Code Breakdown:
+                    Rincian Kode Respons:
                   </h4>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm max-h-48 overflow-y-auto">
                     {Object.entries(stats.statusCodeCounts)
@@ -183,7 +183,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
                       ))}
                   </div>
                    <p className="text-xs text-muted-foreground pt-1">
-                    Note: "Timeout/Abort" and "Network/Proxy Err" indicate issues reaching the target or responses not received in time. 5xx codes are server errors from the target.
+                    Catatan: "Waktu Habis/Batal" dan "Kesalahan Jaringan/Proxy" menunjukkan masalah dalam mencapai target atau respons tidak diterima tepat waktu. Kode 5xx adalah kesalahan server dari target.
                   </p>
                 </div>
               </>
@@ -193,11 +193,10 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
          {!isLoading && stats && stats.error && !error && (
           <div className="flex items-center text-destructive text-lg p-4 bg-destructive/10 rounded-md">
             <AlertCircle className="mr-3 h-6 w-6" />
-            <span className="font-medium">Error: {stats.error}</span>
+            <span className="font-medium">Kesalahan: {stats.error}</span>
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
-
