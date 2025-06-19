@@ -249,7 +249,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Masukkan satu header per baris dalam format Kunci: Nilai. Jika User-Agent tidak ditentukan, satu agen pengguna dapat dipilih secara otomatis dari daftar yang telah ditentukan.
+                Masukkan satu header per baris (Kunci: Nilai). Untuk target yang dilindungi (misalnya oleh Cloudflare), pertimbangkan untuk menggunakan header browser yang realistis (misalnya, User-Agent, Accept-Language, Sec-CH-UA) dan gunakan proxy berkualitas tinggi. Jika User-Agent tidak ditentukan, agen pengguna acak akan dipilih.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -431,3 +431,5 @@ export function RequestCannonForm() {
     </Form>
   );
 }
+
+    
