@@ -32,8 +32,6 @@ import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, F
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
-// Regex for host:port or ip:port, optionally prefixed with user:pass@
-// Does NOT allow http:// or https:// schemes.
 const proxyEntryRegex = /^(([^:]+:[^@]+@)?([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))(:[0-9]{1,5})$/;
 
 const formSchema = z.object({
@@ -42,11 +40,11 @@ const formSchema = z.object({
   headers: z.string().optional(),
   body: z.string().optional(),
   proxies: z.string().optional().refine(val => {
-    if (!val || val.trim() === "") return true; 
+    if (!val || val.trim() === "") return true;
     return val.split('\n').filter(line => line.trim() !== "").every(line => {
         return proxyEntryRegex.test(line.trim());
     });
-  }, { message: "One or more proxy entries are not in a recognized format (e.g., host:port, IP:PORT, or user:pass@host:port). Do not include http:// or https://." }),
+  }, { message: "One or more proxy entries are not in the recognized format (e.g., host:port, IP:PORT, or user:pass@host:port). Do not include http:// or https://." }),
   concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
@@ -57,15 +55,16 @@ type FormValues = z.infer<typeof formSchema>;
 const METHODS_WITH_BODY: readonly string[] = ["POST", "PUT", "PATCH"];
 
 export function RequestCannonForm() {
-  const [isFlooding, setIsFlooding] = useState(false);
+  const [isFlooding, setIsFlooding] = useState(false); // Used to control overall UI disable state for attack
   const [stats, setStats] = useState<FloodStats | null>(null);
   const [currentError, setCurrentError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition(); // Specific to the server action transition
   const { toast } = useToast();
 
   const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt");
   const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
   const [isCheckingProxies, setIsCheckingProxies] = useState<boolean>(false);
+  const [currentAttackDuration, setCurrentAttackDuration] = useState<number | null>(null);
 
 
   const form = useForm<FormValues>({
@@ -86,14 +85,19 @@ export function RequestCannonForm() {
   const currentProxies = form.watch("proxies");
 
   const onSubmit = (values: FormValues) => {
-    if (isFlooding && isPending) { 
+    // Note: isFlooding state is set true immediately, isPending becomes true when startTransition starts.
+    // We primarily use isPending to reflect the server action's busy state.
+    if (isFlooding && isPending) {
       toast({ title: "Flood Stop Requested", description: "The attack will complete its current duration on the server." });
+      // Potentially, one might implement a server-side cancellation token here if the backend supports it.
+      // For now, we let the current server action complete.
       return;
     }
 
-    setIsFlooding(true);
+    setIsFlooding(true); // Disable form fields immediately
     setStats(null);
     setCurrentError(null);
+    setCurrentAttackDuration(values.duration);
 
     startTransition(async () => {
       try {
@@ -117,10 +121,11 @@ export function RequestCannonForm() {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
         setCurrentError(errorMessage);
-        setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage });
+        setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage }); // Ensure stats reflects error
         toast({ variant: "destructive", title: "Failed to Start Flood", description: errorMessage });
       } finally {
-         setIsFlooding(false); 
+         setIsFlooding(false); // Re-enable form fields once server action is done
+         setCurrentAttackDuration(null); // Clear duration after attack finishes or fails
       }
     });
   };
@@ -131,7 +136,7 @@ export function RequestCannonForm() {
       return;
     }
     setIsFetchingProxies(true);
-    setCurrentError(null); 
+    setCurrentError(null);
     try {
       const result = await fetchProxiesFromUrl(proxyApiUrl);
       if (result.error) {
@@ -161,7 +166,7 @@ export function RequestCannonForm() {
     toast({ title: "Checking Proxies", description: "This may take a moment depending on the number of proxies..." });
     try {
       const result = await checkProxies(proxiesToTest);
-      if (result.error && result.totalChecked === 0) { // Specific error for no valid proxies to check
+      if (result.error && result.totalChecked === 0) { 
          toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
       } else if (result.error) {
         toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
@@ -181,8 +186,7 @@ export function RequestCannonForm() {
     }
   };
 
-
-  const isAttackRunning = isPending;
+  const isAnyOperationActive = isPending || isFetchingProxies || isCheckingProxies;
 
   return (
     <Form {...form}>
@@ -194,7 +198,7 @@ export function RequestCannonForm() {
             <FormItem>
               <FormLabel className="flex items-center"><Target className="mr-2 h-4 w-4" />Target URL</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com" {...field} disabled={isAttackRunning || isCheckingProxies} />
+                <Input placeholder="https://example.com" {...field} disabled={isAnyOperationActive} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -207,7 +211,7 @@ export function RequestCannonForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel className="flex items-center"><ArrowRightLeft className="mr-2 h-4 w-4" />HTTP Method</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAttackRunning || isCheckingProxies}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAnyOperationActive}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select an HTTP method" />
@@ -235,7 +239,7 @@ export function RequestCannonForm() {
                   placeholder="Content-Type: application/json\nAuthorization: Bearer token"
                   className="resize-y"
                   {...field}
-                  disabled={isAttackRunning || isCheckingProxies}
+                  disabled={isAnyOperationActive}
                 />
               </FormControl>
               <FormDescription>
@@ -258,7 +262,7 @@ export function RequestCannonForm() {
                     placeholder='{"key": "value"}'
                     className="resize-y"
                     {...field}
-                    disabled={isAttackRunning || isCheckingProxies}
+                    disabled={isAnyOperationActive}
                   />
                 </FormControl>
                 <FormMessage />
@@ -273,7 +277,7 @@ export function RequestCannonForm() {
                 placeholder="Enter proxy list API URL"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
-                disabled={isAttackRunning || isFetchingProxies || isCheckingProxies}
+                disabled={isAnyOperationActive}
                 className="flex-grow"
                 aria-label="Proxy API URL"
             />
@@ -293,7 +297,7 @@ export function RequestCannonForm() {
                   placeholder="user:pass@host1.com:port\n123.45.67.89:8080\nproxy.example.com:3128"
                   className="resize-y h-24"
                   {...field}
-                  disabled={isAttackRunning || isFetchingProxies || isCheckingProxies}
+                  disabled={isAnyOperationActive}
                   aria-label="Proxy List"
                 />
               </FormControl>
@@ -308,7 +312,7 @@ export function RequestCannonForm() {
             <Button
                 type="button"
                 onClick={handleFetchProxies}
-                disabled={isAttackRunning || isFetchingProxies || isCheckingProxies || !proxyApiUrl.trim()}
+                disabled={isAnyOperationActive || !proxyApiUrl.trim()}
                 variant="outline"
                 className="w-full sm:flex-1"
             >
@@ -318,7 +322,7 @@ export function RequestCannonForm() {
             <Button
                 type="button"
                 onClick={handleCheckProxies}
-                disabled={isAttackRunning || isFetchingProxies || isCheckingProxies || !currentProxies?.trim()}
+                disabled={isAnyOperationActive || !currentProxies?.trim()}
                 variant="outline"
                 className="w-full sm:flex-1"
             >
@@ -341,7 +345,7 @@ export function RequestCannonForm() {
                   max={500}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isAttackRunning || isCheckingProxies}
+                  disabled={isAnyOperationActive}
                   aria-label="Concurrent Requests"
                   {...restField}
                 />
@@ -364,7 +368,7 @@ export function RequestCannonForm() {
                   max={500}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isAttackRunning || isCheckingProxies}
+                  disabled={isAnyOperationActive}
                   aria-label="Request Rate"
                   {...restField}
                 />
@@ -387,7 +391,7 @@ export function RequestCannonForm() {
                   max={60}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isAttackRunning || isCheckingProxies}
+                  disabled={isAnyOperationActive}
                   aria-label="Attack Duration"
                   {...restField}
                 />
@@ -400,24 +404,24 @@ export function RequestCannonForm() {
         <Button 
           type="submit" 
           className="w-full" 
-          disabled={isAttackRunning || isCheckingProxies || isFetchingProxies}
-          variant={isAttackRunning ? "destructive" : "default"}
+          disabled={isAnyOperationActive}
+          variant={isPending ? "destructive" : "default"} // Use isPending for attack button visual state
         >
-          {isAttackRunning ? <StopCircle className="mr-2 h-4 w-4 animate-pulse" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-          {isAttackRunning ? "Attack in Progress..." : "Start Attack"}
+          {isPending ? <StopCircle className="mr-2 h-4 w-4 animate-pulse" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+          {isPending ? "Attack in Progress..." : "Start Attack"}
         </Button>
       </form>
 
-      {(isFlooding || isPending || stats || currentError) && (
+      {(isPending || stats || currentError) && ( // Show ProgressDisplay if attack is pending, or if there are stats/errors
         <div className="mt-8">
           <ProgressDisplay
             isLoading={isPending}
             stats={stats}
             error={currentError || (stats?.error ?? null)}
+            attackDuration={currentAttackDuration}
           />
         </div>
       )}
     </Form>
   );
 }
-
