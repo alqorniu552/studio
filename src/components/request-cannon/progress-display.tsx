@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { FloodStats } from "@/app/actions";
@@ -28,7 +29,7 @@ export function ProgressDisplay({ isLoading, stats, error }: ProgressDisplayProp
         {isLoading && (
           <div className="flex items-center text-lg text-primary">
             <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-            <span>Attack in progress... Please wait. (Max 10s duration)</span>
+            <span>Attack in progress... Please wait.</span>
           </div>
         )}
 

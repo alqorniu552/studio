@@ -28,7 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useTransition } from "react";
 import { startFloodAttack, type FloodStats } from "@/app/actions";
 import { ProgressDisplay } from "./progress-display";
-import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText } from "lucide-react";
+import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer } from "lucide-react";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
@@ -37,8 +37,9 @@ const formSchema = z.object({
   method: z.enum(HTTP_METHODS).default("GET"),
   headers: z.string().optional(),
   body: z.string().optional(),
-  concurrency: z.coerce.number().int().min(1, "Min 1").max(100, "Max 100").default(10),
-  rate: z.coerce.number().int().min(1, "Min 1").max(100, "Max 100").default(10),
+  concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
+  rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
+  duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -59,24 +60,19 @@ export function RequestCannonForm() {
       method: "GET",
       headers: "",
       body: "",
-      concurrency: 10,
-      rate: 10,
+      concurrency: 50,
+      rate: 50,
+      duration: 10,
     },
   });
 
   const selectedMethod = form.watch("method");
 
   const onSubmit = (values: FormValues) => {
-    // This part of the logic for stopping is client-side only.
-    // The server-side attack runs for a fixed duration.
     if (isFlooding && isPending) { 
-      // User clicked "Stop Attack" while it was running (but button is disabled during isPending)
-      // This branch is unlikely to be hit if button is disabled by isPending
       toast({ title: "Flood Stop Requested", description: "The attack will complete its current duration on the server." });
-      // setIsFlooding(false); // Let the finally block of startTransition handle this
       return;
     }
-
 
     setIsFlooding(true);
     setStats(null);
@@ -90,14 +86,15 @@ export function RequestCannonForm() {
           values.headers,
           METHODS_WITH_BODY.includes(values.method) ? values.body : undefined,
           values.concurrency,
-          values.rate
+          values.rate,
+          values.duration
         );
         setStats(result);
         if (result.error) {
           setCurrentError(result.error);
           toast({ variant: "destructive", title: "Flood Error", description: result.error });
         } else {
-          toast({ title: "Flood Completed", description: `Sent ${result.totalSent} requests. Successful: ${result.successful}, Failed: ${result.failed}.` });
+          toast({ title: "Flood Completed", description: `Sent ${result.totalSent} requests over ${values.duration}s. Successful: ${result.successful}, Failed: ${result.failed}.` });
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
@@ -110,7 +107,7 @@ export function RequestCannonForm() {
     });
   };
 
-  const isAttackRunning = isPending; // isPending is true while the server action is executing
+  const isAttackRunning = isPending;
 
   return (
     <Form {...form}>
@@ -205,7 +202,7 @@ export function RequestCannonForm() {
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={100}
+                  max={500}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAttackRunning}
@@ -228,7 +225,7 @@ export function RequestCannonForm() {
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={100}
+                  max={500}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAttackRunning}
@@ -240,11 +237,34 @@ export function RequestCannonForm() {
             </FormItem>
           )}
         />
+
+        <FormField
+          control={form.control}
+          name="duration"
+          render={({ field: { onChange, value, ...restField } }) => (
+            <FormItem>
+              <FormLabel className="flex items-center"><Timer className="mr-2 h-4 w-4" />Attack Duration (seconds): {value}</FormLabel>
+              <FormControl>
+                <Slider
+                  defaultValue={[value]}
+                  min={5}
+                  max={60}
+                  step={1}
+                  onValueChange={(vals) => onChange(vals[0])}
+                  disabled={isAttackRunning}
+                  aria-label="Attack Duration"
+                  {...restField}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         
         <Button 
           type="submit" 
           className="w-full" 
-          disabled={isAttackRunning} // Button is disabled while attack is running
+          disabled={isAttackRunning}
           variant={isAttackRunning ? "destructive" : "default"}
         >
           {isAttackRunning ? <StopCircle className="mr-2 h-4 w-4 animate-pulse" /> : <PlayCircle className="mr-2 h-4 w-4" />}
@@ -252,16 +272,15 @@ export function RequestCannonForm() {
         </Button>
       </form>
 
-      {(isFlooding || isPending || stats || currentError) && ( // Show progress if transitioning, or if there are stats/errors
+      {(isFlooding || isPending || stats || currentError) && (
         <div className="mt-8">
           <ProgressDisplay
-            isLoading={isPending} //isLoading should primarily depend on isPending
+            isLoading={isPending}
             stats={stats}
-            error={currentError} // This will be result.error if server action returns an error
+            error={currentError}
           />
         </div>
       )}
     </Form>
   );
 }
-

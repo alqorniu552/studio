@@ -8,8 +8,6 @@ export interface FloodStats {
   error?: string;
 }
 
-const ATTACK_DURATION_SECONDS = 10;
-
 const METHODS_WITHOUT_BODY = ["GET", "HEAD", "DELETE", "OPTIONS"];
 
 export async function startFloodAttack(
@@ -18,7 +16,8 @@ export async function startFloodAttack(
   headersString?: string,
   body?: string,
   concurrency?: number,
-  rate?: number
+  rate?: number,
+  durationInSeconds?: number
 ): Promise<FloodStats> {
   let parsedUrl: URL;
   try {
@@ -31,12 +30,13 @@ export async function startFloodAttack(
      return { totalSent: 0, successful: 0, failed: 0, error: "Target URL must use http or https protocol." };
   }
   
-  const safeConcurrency = Math.min(concurrency ?? 10, 100); 
-  const safeRate = Math.min(rate ?? 10, 100);
+  const safeConcurrency = Math.min(Math.max(1, concurrency ?? 50), 500); 
+  const safeRate = Math.min(Math.max(1, rate ?? 50), 500);
+  const safeDuration = Math.min(Math.max(5, durationInSeconds ?? 10), 60);
 
 
-  if (safeConcurrency <= 0 || safeRate <= 0) {
-    return { totalSent: 0, successful: 0, failed: 0, error: "Concurrency and rate must be positive integers." };
+  if (safeConcurrency <= 0 || safeRate <= 0 || safeDuration <=0) {
+    return { totalSent: 0, successful: 0, failed: 0, error: "Concurrency, rate, and duration must be positive values." };
   }
 
   const parsedHeaders: HeadersInit = {};
@@ -78,9 +78,9 @@ export async function startFloodAttack(
   let successful = 0;
   let failed = 0;
   const startTime = Date.now();
-  const endTime = startTime + ATTACK_DURATION_SECONDS * 1000;
+  const endTime = startTime + safeDuration * 1000;
 
-  console.log(`Starting flood: ${method} ${targetUrl}, Concurrency: ${safeConcurrency}, Rate: ${safeRate} RPS, Duration: ${ATTACK_DURATION_SECONDS}s`);
+  console.log(`Starting flood: ${method} ${targetUrl}, Concurrency: ${safeConcurrency}, Rate: ${safeRate} RPS, Duration: ${safeDuration}s`);
 
   try {
     while (Date.now() < endTime) {
@@ -131,4 +131,3 @@ export async function startFloodAttack(
 
   return { totalSent, successful, failed };
 }
-
