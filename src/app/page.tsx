@@ -1,3 +1,4 @@
+
 import { RequestCannonForm } from '@/components/request-cannon/request-cannon-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Rocket } from 'lucide-react';
@@ -12,7 +13,7 @@ export default function Home() {
           </div>
           <CardTitle className="text-3xl font-headline text-primary">Request Cannon</CardTitle>
           <CardDescription className="text-muted-foreground">
-            Configure and launch HTTP GET flood attacks. Use responsibly.
+            Configure and launch Layer 4 (TCP/UDP) & Layer 7 (HTTP) flood attacks. Use responsibly.
           </CardDescription>
         </CardHeader>
         <CardContent>
