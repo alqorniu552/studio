@@ -4,7 +4,8 @@
 import type { FloodStats } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree, WifiOff, ServerCrash, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree, WifiOff, ServerCrash, AlertTriangle, ShieldAlert, Network } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ProgressDisplayProps {
@@ -20,9 +21,16 @@ const renderStatusCodeLabel = (code: number): string => {
   return `HTTP ${code}`;
 };
 
-function getTargetNetworkStatusSummary(stats: FloodStats | null): { text: string; icon?: React.ElementType; colorClass?: string } {
+interface TargetStatus {
+  text: string;
+  icon: React.ElementType;
+  colorClass: string;
+  shortStatus: string;
+}
+
+function getTargetNetworkStatusSummary(stats: FloodStats | null): TargetStatus | null {
   if (!stats || stats.totalSent === 0) {
-    return { text: "Status target tidak jelas (tidak ada permintaan terkirim atau data hilang)." };
+    return { text: "Status target tidak jelas (tidak ada permintaan terkirim atau data hilang).", icon: ShieldQuestion, colorClass: "text-muted-foreground", shortStatus: "Tidak Diketahui" };
   }
 
   const { totalSent, successful, statusCodeCounts = {} } = stats;
@@ -42,21 +50,21 @@ function getTargetNetworkStatusSummary(stats: FloodStats | null): { text: string
   const serverErrorRate = totalSent > 0 ? serverErrorCount / totalSent : 0;
 
   if (criticalFailureRate > 0.7) {
-    return { text: "Target: Sebagian Besar Tidak Responsif atau Masalah Jaringan Signifikan", icon: WifiOff, colorClass: "text-red-500" };
+    return { text: "Target: Sebagian besar tidak responsif atau ada masalah signifikan pada jaringan/proksi.", icon: WifiOff, colorClass: "text-red-500", shortStatus: "Tidak Responsif" };
   }
   if (serverErrorRate > 0.5) {
-    return { text: "Target: Mengalami Kesalahan Sisi Server yang Tinggi", icon: ServerCrash, colorClass: "text-yellow-500" };
+    return { text: "Target: Mengalami tingkat kesalahan sisi server yang tinggi (5xx).", icon: ServerCrash, colorClass: "text-yellow-500", shortStatus: "Error Server" };
   }
   if (successfulRate > 0.7) {
-    return { text: "Target: Tampak Responsif", icon: CheckCircle, colorClass: "text-green-500" };
+    return { text: "Target: Tampak responsif terhadap sebagian besar permintaan.", icon: CheckCircle, colorClass: "text-green-500", shortStatus: "Responsif" };
   }
   if (successfulRate > 0.4) {
-    return { text: "Target: Responsif Sebagian, Beberapa Kesalahan Terdeteksi", icon: AlertTriangle, colorClass: "text-yellow-600" };
+    return { text: "Target: Responsif sebagian, namun beberapa kesalahan terdeteksi.", icon: AlertTriangle, colorClass: "text-yellow-600", shortStatus: "Sebagian Responsif" };
   }
   if (totalSent > 0) {
-     return { text: "Target: Kesalahan Signifikan atau Responsivitas Rendah", icon: ShieldAlert, colorClass: "text-orange-500" };
+     return { text: "Target: Mengalami kesalahan signifikan atau tingkat responsivitas rendah.", icon: ShieldAlert, colorClass: "text-orange-500", shortStatus: "Responsivitas Rendah" };
   }
-  return { text: "Status target tidak dapat ditentukan." };
+  return { text: "Status target tidak dapat ditentukan dari data yang ada.", icon: ShieldQuestion, colorClass: "text-muted-foreground", shortStatus: "Tidak Dapat Ditentukan" };
 }
 
 
@@ -138,14 +146,41 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
                 <CheckCircle className="mr-2 h-7 w-7 text-green-500" />
                 Serangan Selesai!
               </p>
-              {targetStatusSummary && (
-                <div className={`mt-2 flex items-center justify-center text-md font-medium ${targetStatusSummary.colorClass ?? 'text-foreground'}`}>
-                  {targetStatusSummary.icon && <targetStatusSummary.icon className="mr-2 h-5 w-5" />}
-                  <span>{targetStatusSummary.text}</span>
-                </div>
-              )}
             </div>
-            <Separator />
+
+            {targetStatusSummary && (
+              <>
+                <Separator />
+                <h4 className="text-md font-semibold flex items-center text-muted-foreground pt-3">
+                  <Network className="mr-2 h-5 w-5" />
+                  Catatan Hasil Status Jaringan Target:
+                </h4>
+                <div className="overflow-x-auto">
+                  <Table className="min-w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[80px]">Ikon</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Deskripsi Detil</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell>
+                          <targetStatusSummary.icon className={`h-6 w-6 ${targetStatusSummary.colorClass}`} />
+                        </TableCell>
+                        <TableCell className={`font-medium ${targetStatusSummary.colorClass}`}>
+                          {targetStatusSummary.shortStatus}
+                        </TableCell>
+                        <TableCell className="text-sm">{targetStatusSummary.text}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+            
+            <Separator className="pt-3" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
               <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow-inner">
                 <p className="text-sm text-muted-foreground">Total Terkirim</p>
@@ -200,3 +235,5 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
     </Card>
   );
 }
+
+    
