@@ -54,7 +54,7 @@ body {
   }
 
   .dark {
-    --background: 0 0% 10%; /* #1A1A1A */
+    --background: 0 0% 8%; /* Slightly darker background */
     --foreground: 0 0% 98%;
 
     --card: 0 0% 12%; 
@@ -66,10 +66,10 @@ body {
     --primary: 16 100% 50%; /* #FF4500 */
     --primary-foreground: 0 0% 98%; 
 
-    --secondary: 0 0% 20%; 
+    --secondary: 0 0% 18%; /* Adjusted for new background */
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 15%;
+    --muted: 0 0% 13%; /* Adjusted for new background */
     --muted-foreground: 0 0% 60%; 
 
     --accent: 9 100% 64%; /* #FF6347 */
@@ -78,8 +78,8 @@ body {
     --destructive: 0 70% 50%; 
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 15%; 
+    --border: 0 0% 18%; /* Adjusted to match new secondary */
+    --input: 0 0% 13%; /* Adjusted to match new muted */
     --ring: 9 100% 64%; /* Accent color for rings in dark mode */
     
     --chart-1: 220 70% 50%;
@@ -89,13 +89,13 @@ body {
     --chart-5: 340 75% 55%;
 
     /* Sidebar variables for dark theme */
-    --sidebar-background: 0 0% 10%; /* Dark background for sidebar */
+    --sidebar-background: 0 0% 8%; /* Dark background for sidebar */
     --sidebar-foreground: 0 0% 95.9%; /* Light foreground for sidebar */
     --sidebar-primary: 16 100% 50%; /* Primary color for sidebar active items */
     --sidebar-primary-foreground: 0 0% 98%; /* Light text on sidebar primary */
-    --sidebar-accent: 0 0% 15.9%; /* Dark accent for sidebar hover */
+    --sidebar-accent: 0 0% 13%; /* Dark accent for sidebar hover */
     --sidebar-accent-foreground: 0 0% 95.9%; /* Light text on sidebar accent */
-    --sidebar-border: 0 0% 15.9%; /* Dark border for sidebar */
+    --sidebar-border: 0 0% 13%; /* Dark border for sidebar */
     --sidebar-ring: 9 100% 64%; /* Accent color for sidebar rings */
   }
 }

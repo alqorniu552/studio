@@ -45,16 +45,16 @@ export function ProgressDisplay({ isLoading, stats, error }: ProgressDisplayProp
             <p className="text-lg font-semibold text-primary">Attack Completed!</p>
             <Separator />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-              <div className="flex flex-col items-center p-3 bg-background rounded-md shadow">
+              <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow">
                 <p className="text-sm text-muted-foreground">Total Sent</p>
                 <p className="text-2xl font-bold">{stats.totalSent}</p>
               </div>
-              <div className="flex flex-col items-center p-3 bg-background rounded-md shadow">
+              <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow">
                  <CheckCircle className="h-5 w-5 text-green-500 mb-1" />
                 <p className="text-sm text-muted-foreground">Successful</p>
                 <p className="text-2xl font-bold">{stats.successful}</p>
               </div>
-              <div className="flex flex-col items-center p-3 bg-background rounded-md shadow">
+              <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow">
                 <XCircle className="h-5 w-5 text-red-500 mb-1" />
                 <p className="text-sm text-muted-foreground">Failed</p>
                 <p className="text-2xl font-bold">{stats.failed}</p>
