@@ -28,9 +28,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useTransition } from "react";
 import { startFloodAttack, fetchProxiesFromUrl, checkProxies, type FloodStats } from "@/app/actions";
 import { ProgressDisplay } from "./progress-display";
-import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion, Globe, DownloadCloud, Loader2, ListChecks } from "lucide-react";
+import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion, Globe, DownloadCloud, Loader2, ListChecks, Server } from "lucide-react";
 
-const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
+const HTTP_METHODS_BASE = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
+const HTTP_METHODS_V1_1 = HTTP_METHODS_BASE.map(method => `HTTP/1.1 ${method}`) as readonly string[];
+const ALL_HTTP_METHODS = [...HTTP_METHODS_BASE, ...HTTP_METHODS_V1_1] as const;
+
 
 // Regex to validate proxy entries:
 // Optional user:pass@, then host (hostname or IP), then :port
@@ -40,7 +43,7 @@ const proxyEntryRegex = /^(?:([^:]+:[^@]+@)?)?(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0
 
 const formSchema = z.object({
   targetUrl: z.string().url({ message: "Silakan masukkan URL yang valid (mis., http://contoh.com atau https://contoh.com)." }),
-  method: z.enum(HTTP_METHODS).default("GET"),
+  method: z.enum(ALL_HTTP_METHODS).default("GET"),
   headers: z.string().optional(),
   body: z.string().optional(),
   proxies: z.string().optional().refine(val => {
@@ -61,7 +64,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const METHODS_WITH_BODY: readonly string[] = ["POST", "PUT", "PATCH"];
+const METHODS_WITH_BODY_BASE: readonly string[] = ["POST", "PUT", "PATCH"];
+const getBaseMethod = (method: string): string => {
+  if (method.startsWith("HTTP/1.1 ")) {
+    return method.substring("HTTP/1.1 ".length);
+  }
+  return method;
+};
+
 
 export function RequestCannonForm() {
   const [isFlooding, setIsFlooding] = useState(false);
@@ -94,10 +104,8 @@ export function RequestCannonForm() {
   const currentProxies = form.watch("proxies");
 
   const onSubmit = (values: FormValues) => {
-    if (isFlooding && isPending) { // isFlooding is technically the same as isPending here
+    if (isFlooding && isPending) { 
       toast({ title: "Permintaan Penghentian Banjir", description: "Serangan akan menyelesaikan durasi saat ini di server." });
-      // We don't actually stop it here, as startFloodAttack runs until its duration.
-      // This is more of a user feedback if they click again.
       return;
     }
 
@@ -108,31 +116,34 @@ export function RequestCannonForm() {
 
     startTransition(async () => {
       try {
+        const baseMethod = getBaseMethod(values.method);
         const result = await startFloodAttack(
           values.targetUrl,
-          values.method,
+          values.method, // Pass the full method string (e.g., "HTTP/1.1 GET" or "GET")
           values.headers,
-          METHODS_WITH_BODY.includes(values.method) ? values.body : undefined,
+          METHODS_WITH_BODY_BASE.includes(baseMethod) ? values.body : undefined,
           values.concurrency,
           values.rate,
           values.duration,
-          values.proxies, // Proxies from textarea (should be scheme-less due to validation)
-          proxyApiUrl.trim() ? proxyApiUrl.trim() : undefined // API URL for dynamic fetching
+          values.proxies, 
+          proxyApiUrl.trim() ? proxyApiUrl.trim() : undefined 
         );
         setStats(result);
         if (result.error) {
-          setCurrentError(result.error);
-          toast({ variant: "destructive", title: "Kesalahan Banjir", description: result.error });
+          setCurrentError(result.error); // This is for errors reported by startFloodAttack itself
+          // Toast for this error is handled by ProgressDisplay or if result.error is the only thing
         } else {
           toast({ title: "Banjir Selesai", description: `Mengirim ${result.totalSent} permintaan selama ${values.duration}d. Berhasil: ${result.successful}, Gagal: ${result.failed}.` });
         }
-      } catch (error) {
+      } catch (error) { // This catch block is for errors during the transition (e.g., action itself throws before returning)
         const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga.";
         setCurrentError(errorMessage);
-        setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage });
-        toast({ variant: "destructive", title: "Gagal Memulai Banjir", description: errorMessage });
+        // Ensure stats object reflects this critical failure if not already set by a returned error from startFloodAttack
+        setStats(prevStats => prevStats && prevStats.error ? prevStats : { totalSent: 0, successful: 0, failed: 0, error: errorMessage });
+        // Toast for critical errors caught by the transition
+        // toast({ variant: "destructive", title: "Gagal Memulai Banjir", description: errorMessage }); // Redundant if ProgressDisplay shows it
       } finally {
-         setIsFlooding(false); // same as !isPending
+         setIsFlooding(false); 
          setCurrentAttackDuration(null);
       }
     });
@@ -144,9 +155,9 @@ export function RequestCannonForm() {
       return;
     }
     setIsFetchingProxies(true);
-    setCurrentError(null); // Clear previous errors
+    setCurrentError(null); 
     try {
-      const result = await fetchProxiesFromUrl(proxyApiUrl); // This action now strips schemes
+      const result = await fetchProxiesFromUrl(proxyApiUrl); 
       if (result.error) {
         toast({ variant: "destructive", title: "Gagal Mengambil Proksi", description: result.error, duration: 5000 });
       } else if (result.proxies) {
@@ -169,20 +180,19 @@ export function RequestCannonForm() {
       toast({ variant: "destructive", title: "Tidak Ada Proksi", description: "Daftar proksi kosong. Tidak ada yang perlu diperiksa." });
       return;
     }
-    // Zod validation should have already caught schemes. This is an extra safeguard.
     if (proxiesToTest.split('\n').some(line => line.trim().startsWith("http://") || line.trim().startsWith("https://"))) {
         toast({ variant: "destructive", title: "Format Proksi Tidak Valid", description: "Daftar proksi tidak boleh mengandung skema http:// atau https://. Harap hapus sebelum memeriksa.", duration: 7000});
         return;
     }
 
     setIsCheckingProxies(true);
-    setCurrentError(null); // Clear previous errors
+    setCurrentError(null); 
     toast({ title: "Memeriksa Proksi", description: "Ini mungkin memerlukan beberapa saat tergantung pada jumlah proksi..." });
     try {
-      const result = await checkProxies(proxiesToTest); // Expects scheme-less proxies
-      if (result.error && result.totalChecked === 0 && !result.liveCount) { // No valid proxies found to even check
+      const result = await checkProxies(proxiesToTest); 
+      if (result.error && result.totalChecked === 0 && !result.liveCount) { 
          toast({ variant: "destructive", title: "Kesalahan Pemeriksaan Proksi", description: result.error, duration: 5000 });
-      } else if (result.error) { // Other errors during check
+      } else if (result.error) { 
         toast({ variant: "destructive", title: "Peringatan Pemeriksaan Proksi", description: result.error, duration: 5000 });
       } else {
         form.setValue("proxies", result.liveProxiesString, { shouldValidate: true });
@@ -201,6 +211,8 @@ export function RequestCannonForm() {
   };
 
   const isAnyOperationActive = isPending || isFetchingProxies || isCheckingProxies;
+  const showBodyField = METHODS_WITH_BODY_BASE.includes(getBaseMethod(selectedMethod));
+
 
   return (
     <Form {...form}>
@@ -224,19 +236,29 @@ export function RequestCannonForm() {
           name="method"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><ArrowRightLeft className="mr-2 h-4 w-4" />Metode HTTP</FormLabel>
+              <FormLabel className="flex items-center"><Server className="mr-2 h-4 w-4" />Metode HTTP & Versi</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAnyOperationActive}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih metode HTTP" />
+                    <SelectValue placeholder="Pilih metode & versi HTTP" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {HTTP_METHODS.map((method) => (
-                    <SelectItem key={method} value={method}>{method}</SelectItem>
-                  ))}
+                  <optgroup label="HTTP (Versi Otomatis)">
+                    {HTTP_METHODS_BASE.map((method) => (
+                      <SelectItem key={method} value={method}>{method}</SelectItem>
+                    ))}
+                  </optgroup>
+                  <optgroup label="HTTP/1.1 (Coba Paksa)">
+                    {HTTP_METHODS_V1_1.map((method) => (
+                      <SelectItem key={method} value={method}>{method}</SelectItem>
+                    ))}
+                  </optgroup>
                 </SelectContent>
               </Select>
+              <FormDescription>
+                Pilih metode HTTP. Opsi "HTTP/1.1" akan mencoba memaksa penggunaan HTTP/1.1. Opsi standar akan menggunakan negosiasi otomatis (bisa HTTP/1.1 atau HTTP/2 jika didukung server HTTPS).
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -264,13 +286,13 @@ export function RequestCannonForm() {
           )}
         />
 
-        {METHODS_WITH_BODY.includes(selectedMethod) && (
+        {showBodyField && (
           <FormField
             control={form.control}
             name="body"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Isi Permintaan (Opsional untuk {selectedMethod})</FormLabel>
+                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Isi Permintaan (Opsional untuk {getBaseMethod(selectedMethod)})</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder='{"kunci": "nilai"}'
@@ -288,7 +310,7 @@ export function RequestCannonForm() {
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder=""
+                placeholder="https://api.proxyscrape.com/?request=getproxies&proxytype=http&timeout=10000&country=all&ssl=all&anonymity=all"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -431,7 +453,7 @@ export function RequestCannonForm() {
           <ProgressDisplay
             isLoading={isPending}
             stats={stats}
-            error={currentError || (stats?.error ?? null)}
+            error={currentError /* This is form-level error */}
             attackDuration={currentAttackDuration}
           />
         </div>
@@ -439,3 +461,5 @@ export function RequestCannonForm() {
     </Form>
   );
 }
+
+    

