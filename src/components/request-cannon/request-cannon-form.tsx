@@ -110,7 +110,8 @@ export function RequestCannonForm() {
           values.concurrency,
           values.rate,
           values.duration,
-          values.proxies
+          values.proxies, // Proxies from textarea
+          proxyApiUrl.trim() ? proxyApiUrl.trim() : undefined // API URL for dynamic fetching
         );
         setStats(result);
         if (result.error) {
@@ -249,7 +250,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Masukkan satu header per baris (Kunci: Nilai). Untuk target yang dilindungi (misalnya oleh Cloudflare), pertimbangkan untuk menggunakan header browser yang realistis (misalnya, User-Agent, Accept-Language, Sec-CH-UA) dan gunakan proxy berkualitas tinggi. Jika User-Agent tidak ditentukan, agen pengguna acak akan dipilih.
+                Masukkan satu header per baris (Kunci: Nilai). Untuk target yang dilindungi (misalnya oleh Cloudflare), pertimbangkan untuk menggunakan header browser yang realistis (misalnya, User-Agent, Accept-Language, Sec-CH-UA) dan gunakan proxy berkualitas tinggi. Jika User-Agent tidak ditentukan, agen pengguna acak akan dipilih dari daftar internal.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -278,9 +279,9 @@ export function RequestCannonForm() {
         )}
         
         <div className="space-y-2">
-            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional)</FormLabel>
+            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder="Masukkan URL untuk daftar proksi teks biasa (mis., dari GitHub)"
+                placeholder="https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -288,7 +289,7 @@ export function RequestCannonForm() {
                 aria-label="URL API Proksi"
             />
             <FormDescription>
-            Masukkan URL yang mengembalikan daftar proksi teks biasa (satu per baris, format: IP:PORT atau host:port). Skema (http://) akan dihilangkan.
+            Masukkan URL yang mengembalikan daftar proksi teks biasa (satu per baris, format: IP:PORT atau host:port). Jika diisi, alat akan mencoba mengambil proksi dari URL ini di awal dan setiap 5 detik selama serangan untuk memperbarui daftar proksi secara dinamis. Tombol "Ambil Proksi" di bawah mengisi kolom "Daftar Proksi" secara manual.
             </FormDescription>
         </div>
 
@@ -297,7 +298,7 @@ export function RequestCannonForm() {
           name="proxies"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Daftar Proksi (Opsional)</FormLabel>
+              <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Daftar Proksi (Opsional - Statis/Fallback)</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="user:pass@host1.com:port\n123.45.67.89:8080\nproxy.example.com:3128"
@@ -308,7 +309,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Masukkan satu proksi per baris (mis., myproxy.com:8080, 1.2.3.4:8888, atau user:pass@proxy.example.com:3128). Jangan sertakan skema http:// atau https://.
+                Masukkan satu proksi per baris. Daftar ini digunakan jika URL API Proksi di atas tidak diisi, atau sebagai fallback jika pengambilan awal dari API gagal. Daftar ini tidak diperbarui secara dinamis selama serangan.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -323,7 +324,7 @@ export function RequestCannonForm() {
                 className="w-full sm:flex-1"
             >
                 {isFetchingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                Ambil Proksi
+                Ambil Proksi (Isi ke Daftar Statis)
             </Button>
             <Button
                 type="button"
@@ -333,7 +334,7 @@ export function RequestCannonForm() {
                 className="w-full sm:flex-1"
             >
                 {isCheckingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
-                Periksa Proksi
+                Periksa Proksi (Dari Daftar Statis)
             </Button>
         </div>
 
@@ -431,5 +432,3 @@ export function RequestCannonForm() {
     </Form>
   );
 }
-
-    
