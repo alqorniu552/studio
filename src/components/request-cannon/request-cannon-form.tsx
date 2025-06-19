@@ -26,9 +26,9 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useTransition } from "react";
-import { startFloodAttack, fetchProxiesFromUrl, type FloodStats } from "@/app/actions";
+import { startFloodAttack, fetchProxiesFromUrl, checkProxies, type FloodStats } from "@/app/actions";
 import { ProgressDisplay } from "./progress-display";
-import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion, Globe, DownloadCloud, Loader2 } from "lucide-react";
+import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion, Globe, DownloadCloud, Loader2, ListChecks } from "lucide-react";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
@@ -38,15 +38,14 @@ const formSchema = z.object({
   headers: z.string().optional(),
   body: z.string().optional(),
   proxies: z.string().optional().refine(val => {
-    if (!val || val.trim() === "") return true; // Optional, so empty is fine
-    // Check if all non-empty lines are valid IP:Port or IP (basic check)
-    return val.split('\n').filter(line => line.trim() !== "").every(line => 
-        /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) || // IP:Port or IP
-        /^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*:\d{1,5}$/.test(line.trim()) || // hostname:port
-        /^http(s)?:\/\/[^:\/\s]+(:[0-9]+)?@\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) || // user:pass@IP:Port
-        /^http(s)?:\/\/[^:\/\s]+(:[0-9]+)?@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*(:\d{1,5})?$/.test(line.trim()) // user:pass@hostname:port
-    );
-  }, { message: "One or more proxy entries are not in a recognized format (e.g., IP:PORT, HOST:PORT, or full http(s)://user:pass@host:port)." }),
+    if (!val || val.trim() === "") return true; 
+    return val.split('\n').filter(line => line.trim() !== "").every(line => {
+        const trimmedLine = line.trim();
+        // Allow http(s)://user:pass@host:port, http(s)://host:port, host:port, ip:port
+        return /^((http(s)?:\/\/)?(([^:]+:[^@]+@)?))?[a-zA-Z0-9.-]+(:[0-9]{1,5})$/.test(trimmedLine) || // host:port with optional scheme/auth
+               /^((http(s)?:\/\/)?(([^:]+:[^@]+@)?))?\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:[0-9]{1,5})$/.test(trimmedLine); // ip:port with optional scheme/auth
+    });
+  }, { message: "One or more proxy entries are not in a recognized format (e.g., [http://[user:pass@]]host:port or IP:PORT)." }),
   concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
@@ -65,6 +64,7 @@ export function RequestCannonForm() {
 
   const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&protocol=http&proxy_format=ipport&format=text&status=alive&anonymity=elite");
   const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
+  const [isCheckingProxies, setIsCheckingProxies] = useState<boolean>(false);
 
 
   const form = useForm<FormValues>({
@@ -82,6 +82,7 @@ export function RequestCannonForm() {
   });
 
   const selectedMethod = form.watch("method");
+  const currentProxies = form.watch("proxies");
 
   const onSubmit = (values: FormValues) => {
     if (isFlooding && isPending) { 
@@ -136,7 +137,7 @@ export function RequestCannonForm() {
         toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: result.error, duration: 5000 });
       } else if (result.proxies) {
         form.setValue("proxies", result.proxies, { shouldValidate: true });
-        toast({ title: "Proxies Fetched", description: "Proxy list has been populated." });
+        toast({ title: "Proxies Fetched", description: "Proxy list populated. Consider checking them for validity." });
       } else {
         toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: "Received no proxies or an unexpected response.", duration: 5000 });
       }
@@ -147,6 +148,36 @@ export function RequestCannonForm() {
       setIsFetchingProxies(false);
     }
   };
+
+  const handleCheckProxies = async () => {
+    const proxiesToTest = form.getValues("proxies");
+    if (!proxiesToTest || !proxiesToTest.trim()) {
+      toast({ variant: "destructive", title: "No Proxies", description: "Proxy list is empty. Nothing to check." });
+      return;
+    }
+    setIsCheckingProxies(true);
+    setCurrentError(null);
+    toast({ title: "Checking Proxies", description: "This may take a moment depending on the number of proxies..." });
+    try {
+      const result = await checkProxies(proxiesToTest);
+      if (result.error) {
+        toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
+      } else {
+        form.setValue("proxies", result.liveProxiesString, { shouldValidate: true });
+        toast({
+          title: "Proxy Check Completed",
+          description: `Checked ${result.totalChecked} proxies. Found ${result.liveCount} live. ${result.deadCount} were unresponsive or invalid and have been removed. Proxy list updated.`,
+          duration: 7000,
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred during proxy check.";
+      toast({ variant: "destructive", title: "Error Checking Proxies", description: errorMessage, duration: 5000 });
+    } finally {
+      setIsCheckingProxies(false);
+    }
+  };
+
 
   const isAttackRunning = isPending;
 
@@ -160,7 +191,7 @@ export function RequestCannonForm() {
             <FormItem>
               <FormLabel className="flex items-center"><Target className="mr-2 h-4 w-4" />Target URL</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com" {...field} disabled={isAttackRunning} />
+                <Input placeholder="https://example.com" {...field} disabled={isAttackRunning || isCheckingProxies} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -173,7 +204,7 @@ export function RequestCannonForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel className="flex items-center"><ArrowRightLeft className="mr-2 h-4 w-4" />HTTP Method</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAttackRunning}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAttackRunning || isCheckingProxies}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select an HTTP method" />
@@ -201,7 +232,7 @@ export function RequestCannonForm() {
                   placeholder="Content-Type: application/json\nAuthorization: Bearer token"
                   className="resize-y"
                   {...field}
-                  disabled={isAttackRunning}
+                  disabled={isAttackRunning || isCheckingProxies}
                 />
               </FormControl>
               <FormDescription>
@@ -224,7 +255,7 @@ export function RequestCannonForm() {
                     placeholder='{"key": "value"}'
                     className="resize-y"
                     {...field}
-                    disabled={isAttackRunning}
+                    disabled={isAttackRunning || isCheckingProxies}
                   />
                 </FormControl>
                 <FormMessage />
@@ -235,26 +266,14 @@ export function RequestCannonForm() {
         
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />Proxy API URL (e.g., Proxyscrape)</FormLabel>
-            <div className="flex flex-col sm:flex-row gap-2">
             <Input
                 placeholder="Enter proxy list API URL"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
-                disabled={isAttackRunning || isFetchingProxies}
+                disabled={isAttackRunning || isFetchingProxies || isCheckingProxies}
                 className="flex-grow"
                 aria-label="Proxy API URL"
             />
-            <Button
-                type="button"
-                onClick={handleFetchProxies}
-                disabled={isAttackRunning || isFetchingProxies || !proxyApiUrl.trim()}
-                variant="outline"
-                className="w-full sm:w-auto"
-            >
-                {isFetchingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                Fetch Proxies
-            </Button>
-            </div>
             <FormDescription>
             Enter a URL that returns a plain text list of proxies (one per line). Default is a Proxyscrape free HTTP endpoint.
             </FormDescription>
@@ -271,17 +290,39 @@ export function RequestCannonForm() {
                   placeholder="http://user:pass@host1:port\nhttp://host2:port\n..."
                   className="resize-y h-24"
                   {...field}
-                  disabled={isAttackRunning}
+                  disabled={isAttackRunning || isFetchingProxies || isCheckingProxies}
                   aria-label="Proxy List"
                 />
               </FormControl>
               <FormDescription>
-                Enter one proxy URL per line (e.g., IP:PORT, HOST:PORT, or full http(s)://user:pass@host:port). Can be auto-populated using the API URL field above.
+                Enter one proxy URL per line (e.g., IP:PORT, HOST:PORT, or full http(s)://user:pass@host:port).
               </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
+        <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+                type="button"
+                onClick={handleFetchProxies}
+                disabled={isAttackRunning || isFetchingProxies || isCheckingProxies || !proxyApiUrl.trim()}
+                variant="outline"
+                className="w-full sm:flex-1"
+            >
+                {isFetchingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                Fetch Proxies
+            </Button>
+            <Button
+                type="button"
+                onClick={handleCheckProxies}
+                disabled={isAttackRunning || isFetchingProxies || isCheckingProxies || !currentProxies?.trim()}
+                variant="outline"
+                className="w-full sm:flex-1"
+            >
+                {isCheckingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
+                Check Proxies
+            </Button>
+        </div>
 
 
         <FormField
@@ -297,7 +338,7 @@ export function RequestCannonForm() {
                   max={500}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isAttackRunning}
+                  disabled={isAttackRunning || isCheckingProxies}
                   aria-label="Concurrent Requests"
                   {...restField}
                 />
@@ -320,7 +361,7 @@ export function RequestCannonForm() {
                   max={500}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isAttackRunning}
+                  disabled={isAttackRunning || isCheckingProxies}
                   aria-label="Request Rate"
                   {...restField}
                 />
@@ -343,7 +384,7 @@ export function RequestCannonForm() {
                   max={60}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
-                  disabled={isAttackRunning}
+                  disabled={isAttackRunning || isCheckingProxies}
                   aria-label="Attack Duration"
                   {...restField}
                 />
@@ -356,7 +397,7 @@ export function RequestCannonForm() {
         <Button 
           type="submit" 
           className="w-full" 
-          disabled={isAttackRunning}
+          disabled={isAttackRunning || isCheckingProxies || isFetchingProxies}
           variant={isAttackRunning ? "destructive" : "default"}
         >
           {isAttackRunning ? <StopCircle className="mr-2 h-4 w-4 animate-pulse" /> : <PlayCircle className="mr-2 h-4 w-4" />}
