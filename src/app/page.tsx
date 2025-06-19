@@ -13,7 +13,7 @@ export default function Home() {
           </div>
           <CardTitle className="text-3xl font-headline text-primary">Meriam Permintaan</CardTitle>
           <CardDescription className="text-muted-foreground">
-            Konfigurasi dan luncurkan serangan banjir Layer 7 (HTTP). Gunakan secara bertanggung jawab.
+            Konfigurasi dan luncurkan serangan banjir Layer 7 (HTTP). Tujuannya adalah untuk menguji ketahanan server target terhadap beban tinggi, yang berpotensi menyebabkannya merespons dengan kesalahan seperti 503 Bad Gateway, 502 Bad Gateway, 504 Gateway Timeout, atau menjadi tidak responsif. Gunakan secara bertanggung jawab.
           </CardDescription>
         </CardHeader>
         <CardContent>
