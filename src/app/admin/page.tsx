@@ -13,32 +13,23 @@ import { useState, useEffect, useCallback } from 'react';
 import { startFloodAttack, type FloodStats } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 
-const exampleAttackHistory = [
-  {
-    id: 1,
-    dateTime: '2024-07-30 10:15:30',
-    targetUrl: 'https://contoh-target.com',
-    duration: '30d',
-    requestsSent: 15000,
-    successful: 14500,
-    failed: 500,
-    status: 'Selesai',
-    statusIcon: <CheckCircle className="h-4 w-4 text-green-500" />,
-  },
-  {
-    id: 2,
-    dateTime: '2024-07-30 09:45:10',
-    targetUrl: 'http://uji-lain.org',
-    duration: '60d',
-    requestsSent: 28000,
-    successful: 5000,
-    failed: 23000,
-    status: 'Penuh Error',
-    statusIcon: <XCircle className="h-4 w-4 text-red-500" />,
-  },
-];
+// Define the interface for attack history entries, can be moved to a shared types file later
+interface AttackHistoryEntry {
+  id: string;
+  dateTime: string;
+  targetUrl: string;
+  method: string;
+  duration: number;
+  requestsSent: number;
+  successful: number;
+  failed: number;
+  status: string;
+  error?: string;
+  statusCodeCounts?: Record<number, number>;
+}
 
 const HTTP_METHODS_BASE = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
+const ATTACK_HISTORY_STORAGE_KEY = "requestCannonAttackHistory";
 
 interface AutoAttackLogEntry {
   timestamp: string;
@@ -51,6 +42,12 @@ interface AutoAttackLogEntry {
   statusText: string;
 }
 
+const getStatusIcon = (status: string, error?: string): React.ReactElement => {
+    if (error || status.toLowerCase() === "gagal") return <XCircle className="h-4 w-4 text-red-500" />;
+    if (status.toLowerCase() === "selesai") return <CheckCircle className="h-4 w-4 text-green-500" />;
+    return <AlertTriangle className="h-4 w-4 text-yellow-500" />; // Default for other statuses like "Berjalan" or unknown
+};
+
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
@@ -61,6 +58,23 @@ export default function AdminDashboardPage() {
   const [autoAttackLogs, setAutoAttackLogs] = useState<AutoAttackLogEntry[]>([]);
   const [isAttacking, setIsAttacking] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [manualAttackHistory, setManualAttackHistory] = useState<AttackHistoryEntry[]>([]);
+
+  useEffect(() => {
+    // Load manual attack history from localStorage
+    const storedHistory = localStorage.getItem(ATTACK_HISTORY_STORAGE_KEY);
+    if (storedHistory) {
+      try {
+        const parsedHistory = JSON.parse(storedHistory);
+        if (Array.isArray(parsedHistory)) {
+          setManualAttackHistory(parsedHistory);
+        }
+      } catch (e) {
+        console.error("Failed to parse attack history from localStorage:", e);
+      }
+    }
+  }, []);
+
 
   const addAutoAttackLogEntry = useCallback((logEntry: Omit<AutoAttackLogEntry, 'timestamp'>) => {
     const newEntry = { ...logEntry, timestamp: new Date().toLocaleString('id-ID') };
@@ -194,7 +208,7 @@ export default function AdminDashboardPage() {
       </p>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Existing summary cards */}
+        {/* Existing summary cards - These are still example/static */}
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Serangan (Contoh)</CardTitle>
@@ -310,49 +324,55 @@ export default function AdminDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Existing Attack History Card */}
+      {/* Manual Attack History Card - Now dynamic from localStorage */}
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center">
             <History className="mr-2 h-5 w-5" />
-            Riwayat Serangan Terbaru (Contoh Data)
+            Riwayat Serangan Manual Terbaru
           </CardTitle>
           <CardDescription>
-            Menampilkan ringkasan serangan yang telah dilakukan. Untuk data aktual, integrasi dengan penyimpanan data diperlukan.
+            Menampilkan ringkasan serangan manual yang telah dilakukan dari halaman utama (disimpan di peramban Anda).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tanggal &amp; Waktu</TableHead>
-                <TableHead>Target URL</TableHead>
-                <TableHead className="text-center">Durasi</TableHead>
-                <TableHead className="text-right">Terkirim</TableHead>
-                <TableHead className="text-right">Sukses</TableHead>
-                <TableHead className="text-right">Gagal</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {exampleAttackHistory.map((attack) => (
-                <TableRow key={attack.id}>
-                  <TableCell className="font-medium">{attack.dateTime}</TableCell>
-                  <TableCell>{attack.targetUrl}</TableCell>
-                  <TableCell className="text-center">{attack.duration}</TableCell>
-                  <TableCell className="text-right">{attack.requestsSent.toLocaleString()}</TableCell>
-                  <TableCell className="text-right text-green-500">{attack.successful.toLocaleString()}</TableCell>
-                  <TableCell className="text-right text-red-500">{attack.failed.toLocaleString()}</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center space-x-1">
-                      {attack.statusIcon}
-                      <span>{attack.status}</span>
-                    </div>
-                  </TableCell>
+          {manualAttackHistory.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal &amp; Waktu</TableHead>
+                  <TableHead>Target URL</TableHead>
+                  <TableHead>Metode</TableHead>
+                  <TableHead className="text-center">Durasi</TableHead>
+                  <TableHead className="text-right">Terkirim</TableHead>
+                  <TableHead className="text-right">Sukses</TableHead>
+                  <TableHead className="text-right">Gagal</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {manualAttackHistory.map((attack) => (
+                  <TableRow key={attack.id}>
+                    <TableCell className="font-medium">{attack.dateTime}</TableCell>
+                    <TableCell className="truncate max-w-xs">{attack.targetUrl}</TableCell>
+                    <TableCell>{attack.method}</TableCell>
+                    <TableCell className="text-center">{attack.duration}d</TableCell>
+                    <TableCell className="text-right">{attack.requestsSent.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-green-500">{attack.successful.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-red-500">{attack.failed.toLocaleString()}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center space-x-1">
+                        {getStatusIcon(attack.status, attack.error)}
+                        <span>{attack.status}</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">Belum ada riwayat serangan manual yang tercatat.</p>
+          )}
         </CardContent>
       </Card>
         

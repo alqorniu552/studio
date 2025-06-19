@@ -33,16 +33,26 @@ import { startFloodAttack, fetchProxiesFromUrl, checkProxies, type FloodStats } 
 import { ProgressDisplay } from "./progress-display";
 import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion, Globe, DownloadCloud, Loader2, ListChecks, Server } from "lucide-react";
 
+// Define the interface for attack history entries, can be moved to a shared types file later
+interface AttackHistoryEntry {
+  id: string;
+  dateTime: string;
+  targetUrl: string;
+  method: string;
+  duration: number;
+  requestsSent: number;
+  successful: number;
+  failed: number;
+  status: string;
+  error?: string;
+  statusCodeCounts?: Record<number, number>;
+}
+
 const HTTP_METHODS_BASE = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 const HTTP_METHODS_V1_1 = HTTP_METHODS_BASE.map(method => `HTTP/1.1 ${method}`) as readonly string[];
 const ALL_HTTP_METHODS = [...HTTP_METHODS_BASE, ...HTTP_METHODS_V1_1] as const;
 
-
-// Regex to validate proxy entries:
-// Optional user:pass@, then host (hostname or IP), then :port
-// Does NOT allow http(s):// scheme here as it should be stripped or cause validation failure.
 const proxyEntryRegex = /^(?:([^:]+:[^@]+@)?)?(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?|[a-zA-Z]{2,6})|(?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})$/;
-
 
 const formSchema = z.object({
   targetUrl: z.string().url({ message: "Silakan masukkan URL yang valid (mis., http://contoh.com atau https://contoh.com)." }),
@@ -50,18 +60,17 @@ const formSchema = z.object({
   headers: z.string().optional(),
   body: z.string().optional(),
   proxies: z.string().optional().refine(val => {
-    if (!val || val.trim() === "") return true; // Optional field, empty is fine
+    if (!val || val.trim() === "") return true; 
     return val.split('\n').filter(line => line.trim() !== "").every(line => {
         const trimmedLine = line.trim();
-        // Disallow http(s):// schemes directly in the textarea
         if (trimmedLine.startsWith("http://") || trimmedLine.startsWith("https://")) {
             return false;
         }
         return proxyEntryRegex.test(trimmedLine);
     });
   }, { message: "Satu atau lebih entri proksi tidak valid. Gunakan format host:port, IP:PORT, atau user:pass@host:port. Jangan sertakan skema http:// atau https://." }),
-  concurrency: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20000").default(50),
-  rate: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20000").default(50),
+  concurrency: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20.000").default(50),
+  rate: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20.000").default(50),
   duration: z.coerce.number().int().min(5, "Min 5d").max(60, "Maks 60d").default(10),
 });
 
@@ -75,6 +84,8 @@ const getBaseMethod = (method: string): string => {
   return method;
 };
 
+const MAX_HISTORY_ENTRIES = 5;
+const ATTACK_HISTORY_STORAGE_KEY = "requestCannonAttackHistory";
 
 export function RequestCannonForm() {
   const [isFlooding, setIsFlooding] = useState(false);
@@ -87,7 +98,6 @@ export function RequestCannonForm() {
   const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
   const [isCheckingProxies, setIsCheckingProxies] = useState<boolean>(false);
   const [currentAttackDuration, setCurrentAttackDuration] = useState<number | null>(null);
-
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -122,7 +132,7 @@ export function RequestCannonForm() {
         const baseMethod = getBaseMethod(values.method);
         const result = await startFloodAttack(
           values.targetUrl,
-          values.method, // Pass the full method string (e.g., "HTTP/1.1 GET" or "GET")
+          values.method,
           values.headers,
           METHODS_WITH_BODY_BASE.includes(baseMethod) ? values.body : undefined,
           values.concurrency,
@@ -132,19 +142,52 @@ export function RequestCannonForm() {
           proxyApiUrl.trim() ? proxyApiUrl.trim() : undefined 
         );
         setStats(result);
+
+        // Save to localStorage
+        try {
+          const newHistoryEntry: AttackHistoryEntry = {
+            id: Date.now().toString(),
+            dateTime: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'medium'}),
+            targetUrl: values.targetUrl,
+            method: values.method,
+            duration: values.duration,
+            requestsSent: result.totalSent,
+            successful: result.successful,
+            failed: result.failed,
+            status: result.error ? "Gagal" : "Selesai",
+            error: result.error,
+            statusCodeCounts: result.statusCodeCounts,
+          };
+
+          const existingHistoryString = localStorage.getItem(ATTACK_HISTORY_STORAGE_KEY);
+          let history: AttackHistoryEntry[] = [];
+          if (existingHistoryString) {
+            try {
+              history = JSON.parse(existingHistoryString);
+              if (!Array.isArray(history)) history = [];
+            } catch (e) {
+              history = []; // Reset if parsing fails
+            }
+          }
+          history.unshift(newHistoryEntry); // Add to the beginning
+          history = history.slice(0, MAX_HISTORY_ENTRIES); // Keep only the N most recent
+          localStorage.setItem(ATTACK_HISTORY_STORAGE_KEY, JSON.stringify(history));
+
+        } catch (e) {
+          console.error("Failed to save attack history to localStorage:", e);
+          // Non-critical error, so we don't need to show a toast for this
+        }
+
+
         if (result.error) {
-          setCurrentError(result.error); // This is for errors reported by startFloodAttack itself
-          // Toast for this error is handled by ProgressDisplay or if result.error is the only thing
+          setCurrentError(result.error);
         } else {
           toast({ title: "Banjir Selesai", description: `Mengirim ${result.totalSent} permintaan selama ${values.duration}d. Berhasil: ${result.successful}, Gagal: ${result.failed}.` });
         }
-      } catch (error) { // This catch block is for errors during the transition (e.g., action itself throws before returning)
+      } catch (error) { 
         const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga.";
         setCurrentError(errorMessage);
-        // Ensure stats object reflects this critical failure if not already set by a returned error from startFloodAttack
         setStats(prevStats => prevStats && prevStats.error ? prevStats : { totalSent: 0, successful: 0, failed: 0, error: errorMessage });
-        // Toast for critical errors caught by the transition
-        // toast({ variant: "destructive", title: "Gagal Memulai Banjir", description: errorMessage }); // Redundant if ProgressDisplay shows it
       } finally {
          setIsFlooding(false); 
          setCurrentAttackDuration(null);
@@ -467,3 +510,4 @@ export function RequestCannonForm() {
     </Form>
   );
 }
+
