@@ -63,13 +63,13 @@ type FormValues = z.infer<typeof formSchema>;
 const METHODS_WITH_BODY: readonly string[] = ["POST", "PUT", "PATCH"];
 
 export function RequestCannonForm() {
-  const [isFlooding, setIsFlooding] = useState(false); 
+  const [isFlooding, setIsFlooding] = useState(false);
   const [stats, setStats] = useState<FloodStats | null>(null);
   const [currentError, setCurrentError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition(); 
+  const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt");
+  const [proxyApiUrl, setProxyApiUrl] = useState<string>(""); // Default to empty
   const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
   const [isCheckingProxies, setIsCheckingProxies] = useState<boolean>(false);
   const [currentAttackDuration, setCurrentAttackDuration] = useState<number | null>(null);
@@ -98,7 +98,7 @@ export function RequestCannonForm() {
       return;
     }
 
-    setIsFlooding(true); 
+    setIsFlooding(true);
     setStats(null);
     setCurrentError(null);
     setCurrentAttackDuration(values.duration);
@@ -125,11 +125,11 @@ export function RequestCannonForm() {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
         setCurrentError(errorMessage);
-        setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage }); 
+        setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage });
         toast({ variant: "destructive", title: "Failed to Start Flood", description: errorMessage });
       } finally {
-         setIsFlooding(false); 
-         setCurrentAttackDuration(null); 
+         setIsFlooding(false);
+         setCurrentAttackDuration(null);
       }
     });
   };
@@ -177,7 +177,7 @@ export function RequestCannonForm() {
     toast({ title: "Checking Proxies", description: "This may take a moment depending on the number of proxies..." });
     try {
       const result = await checkProxies(proxiesToTest);
-      if (result.error && result.totalChecked === 0) { 
+      if (result.error && result.totalChecked === 0) {
          toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
       } else if (result.error) {
         toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
@@ -254,7 +254,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Enter one header per line in Key: Value format. If User-Agent is not specified, one may be chosen automatically.
+                Enter one header per line in Key: Value format. If User-Agent is not specified, one may be chosen automatically from a predefined list.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -283,9 +283,9 @@ export function RequestCannonForm() {
         )}
         
         <div className="space-y-2">
-            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />Proxy API URL</FormLabel>
+            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />Proxy API URL (Optional)</FormLabel>
             <Input
-                placeholder="Enter proxy list API URL"
+                placeholder="Enter URL for plain text proxy list (e.g., from GitHub)"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -293,7 +293,7 @@ export function RequestCannonForm() {
                 aria-label="Proxy API URL"
             />
             <FormDescription>
-            Enter a URL that returns a plain text list of proxies (one per line, e.g. IP:PORT). Schemes (http://) will be stripped.
+            Enter a URL that returns a plain text list of proxies (one per line, format: IP:PORT or host:port). Schemes (http://) will be stripped.
             </FormDescription>
         </div>
 
