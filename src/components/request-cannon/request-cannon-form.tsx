@@ -32,7 +32,10 @@ import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, F
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
-const proxyEntryRegex = /^(?:([^:]+:[^@]+@)?)?(?:([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))(:[0-9]{1,5})$/;
+// Regex to validate proxy entries:
+// Optional user:pass@, then host (hostname or IP), then :port
+// Does NOT allow http(s):// scheme here as it should be stripped or cause validation failure.
+const proxyEntryRegex = /^(?:([^:]+:[^@]+@)?)?(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?|[a-zA-Z]{2,6})|(?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})$/;
 
 
 const formSchema = z.object({
@@ -41,9 +44,10 @@ const formSchema = z.object({
   headers: z.string().optional(),
   body: z.string().optional(),
   proxies: z.string().optional().refine(val => {
-    if (!val || val.trim() === "") return true;
+    if (!val || val.trim() === "") return true; // Optional field, empty is fine
     return val.split('\n').filter(line => line.trim() !== "").every(line => {
         const trimmedLine = line.trim();
+        // Disallow http(s):// schemes directly in the textarea
         if (trimmedLine.startsWith("http://") || trimmedLine.startsWith("https://")) {
             return false;
         }
@@ -90,8 +94,10 @@ export function RequestCannonForm() {
   const currentProxies = form.watch("proxies");
 
   const onSubmit = (values: FormValues) => {
-    if (isFlooding && isPending) {
+    if (isFlooding && isPending) { // isFlooding is technically the same as isPending here
       toast({ title: "Permintaan Penghentian Banjir", description: "Serangan akan menyelesaikan durasi saat ini di server." });
+      // We don't actually stop it here, as startFloodAttack runs until its duration.
+      // This is more of a user feedback if they click again.
       return;
     }
 
@@ -110,7 +116,7 @@ export function RequestCannonForm() {
           values.concurrency,
           values.rate,
           values.duration,
-          values.proxies, // Proxies from textarea
+          values.proxies, // Proxies from textarea (should be scheme-less due to validation)
           proxyApiUrl.trim() ? proxyApiUrl.trim() : undefined // API URL for dynamic fetching
         );
         setStats(result);
@@ -126,7 +132,7 @@ export function RequestCannonForm() {
         setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage });
         toast({ variant: "destructive", title: "Gagal Memulai Banjir", description: errorMessage });
       } finally {
-         setIsFlooding(false);
+         setIsFlooding(false); // same as !isPending
          setCurrentAttackDuration(null);
       }
     });
@@ -138,14 +144,14 @@ export function RequestCannonForm() {
       return;
     }
     setIsFetchingProxies(true);
-    setCurrentError(null);
+    setCurrentError(null); // Clear previous errors
     try {
-      const result = await fetchProxiesFromUrl(proxyApiUrl);
+      const result = await fetchProxiesFromUrl(proxyApiUrl); // This action now strips schemes
       if (result.error) {
         toast({ variant: "destructive", title: "Gagal Mengambil Proksi", description: result.error, duration: 5000 });
       } else if (result.proxies) {
         form.setValue("proxies", result.proxies, { shouldValidate: true });
-        toast({ title: "Proksi Diambil", description: "Daftar proksi telah diisi. Pastikan dalam format host:port atau IP:PORT dan pertimbangkan untuk memeriksanya." });
+        toast({ title: "Proksi Diambil", description: `Daftar proksi telah diisi dengan format ip:port. Skema http(s):// otomatis dihapus. Total proksi valid: ${result.proxies.split('\n').filter(p=>p.trim()).length}. Pertimbangkan untuk memeriksanya.` });
       } else {
         toast({ variant: "destructive", title: "Gagal Mengambil Proksi", description: "Tidak menerima proksi atau respons tidak terduga.", duration: 5000 });
       }
@@ -163,21 +169,22 @@ export function RequestCannonForm() {
       toast({ variant: "destructive", title: "Tidak Ada Proksi", description: "Daftar proksi kosong. Tidak ada yang perlu diperiksa." });
       return;
     }
+    // Zod validation should have already caught schemes. This is an extra safeguard.
     if (proxiesToTest.split('\n').some(line => line.trim().startsWith("http://") || line.trim().startsWith("https://"))) {
         toast({ variant: "destructive", title: "Format Proksi Tidak Valid", description: "Daftar proksi tidak boleh mengandung skema http:// atau https://. Harap hapus sebelum memeriksa.", duration: 7000});
         return;
     }
 
     setIsCheckingProxies(true);
-    setCurrentError(null);
+    setCurrentError(null); // Clear previous errors
     toast({ title: "Memeriksa Proksi", description: "Ini mungkin memerlukan beberapa saat tergantung pada jumlah proksi..." });
     try {
-      const result = await checkProxies(proxiesToTest);
-      if (result.error && result.totalChecked === 0) {
+      const result = await checkProxies(proxiesToTest); // Expects scheme-less proxies
+      if (result.error && result.totalChecked === 0 && !result.liveCount) { // No valid proxies found to even check
          toast({ variant: "destructive", title: "Kesalahan Pemeriksaan Proksi", description: result.error, duration: 5000 });
-      } else if (result.error) {
-        toast({ variant: "destructive", title: "Kesalahan Pemeriksaan Proksi", description: result.error, duration: 5000 });
-      }else {
+      } else if (result.error) { // Other errors during check
+        toast({ variant: "destructive", title: "Peringatan Pemeriksaan Proksi", description: result.error, duration: 5000 });
+      } else {
         form.setValue("proxies", result.liveProxiesString, { shouldValidate: true });
         toast({
           title: "Pemeriksaan Proksi Selesai",
@@ -243,7 +250,7 @@ export function RequestCannonForm() {
               <FormLabel className="flex items-center"><ListPlus className="mr-2 h-4 w-4" />Header Kustom (Opsional)</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="Content-Type: application/json\nAuthorization: Bearer token"
+                  placeholder="Content-Type: application/json&#x0a;Authorization: Bearer token&#x0a;User-Agent: MyCustomAgent/1.0"
                   className="resize-y"
                   {...field}
                   disabled={isAnyOperationActive}
@@ -281,7 +288,7 @@ export function RequestCannonForm() {
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder="https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
+                placeholder="https://api.proxyscrape.com/v2/?request=getproxies..."
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -289,7 +296,7 @@ export function RequestCannonForm() {
                 aria-label="URL API Proksi"
             />
             <FormDescription>
-            Masukkan URL yang mengembalikan daftar proksi teks biasa (satu per baris, format: IP:PORT atau host:port). Jika diisi, alat akan mencoba mengambil proksi dari URL ini di awal dan setiap 5 detik selama serangan untuk memperbarui daftar proksi secara dinamis. Tombol "Ambil Proksi" di bawah mengisi kolom "Daftar Proksi" secara manual.
+            Masukkan URL yang mengembalikan daftar proksi teks biasa (satu per baris, format: IP:PORT atau host:port). Skema http(s):// akan otomatis dihapus. Jika diisi, alat akan mencoba mengambil proksi dari URL ini di awal dan setiap 5 detik selama serangan untuk memperbarui daftar proksi secara dinamis. Tombol "Ambil Proksi" di bawah mengisi kolom "Daftar Proksi" secara manual.
             </FormDescription>
         </div>
 
@@ -301,7 +308,7 @@ export function RequestCannonForm() {
               <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Daftar Proksi (Opsional - Statis/Fallback)</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="user:pass@host1.com:port\n123.45.67.89:8080\nproxy.example.com:3128"
+                  placeholder="user:pass@host1.com:port&#x0a;123.45.67.89:8080&#x0a;proxy.example.com:3128"
                   className="resize-y h-24"
                   {...field}
                   disabled={isAnyOperationActive}
@@ -309,7 +316,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Masukkan satu proksi per baris. Daftar ini digunakan jika URL API Proksi di atas tidak diisi, atau sebagai fallback jika pengambilan awal dari API gagal. Daftar ini tidak diperbarui secara dinamis selama serangan.
+                Masukkan satu proksi per baris dalam format ip:port, host:port, atau user:pass@host:port. Jangan sertakan skema http:// atau https://. Daftar ini digunakan jika URL API Proksi di atas tidak diisi, atau sebagai fallback jika pengambilan awal dari API gagal. Daftar ini tidak diperbarui secara dinamis selama serangan.
               </FormDescription>
               <FormMessage />
             </FormItem>

