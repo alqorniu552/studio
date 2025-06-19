@@ -28,7 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useTransition } from "react";
 import { startFloodAttack, type FloodStats } from "@/app/actions";
 import { ProgressDisplay } from "./progress-display";
-import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer } from "lucide-react";
+import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion } from "lucide-react";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
@@ -37,6 +37,7 @@ const formSchema = z.object({
   method: z.enum(HTTP_METHODS).default("GET"),
   headers: z.string().optional(),
   body: z.string().optional(),
+  proxies: z.string().optional(),
   concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
@@ -60,6 +61,7 @@ export function RequestCannonForm() {
       method: "GET",
       headers: "",
       body: "",
+      proxies: "",
       concurrency: 50,
       rate: 50,
       duration: 10,
@@ -87,7 +89,8 @@ export function RequestCannonForm() {
           METHODS_WITH_BODY.includes(values.method) ? values.body : undefined,
           values.concurrency,
           values.rate,
-          values.duration
+          values.duration,
+          values.proxies
         );
         setStats(result);
         if (result.error) {
@@ -191,6 +194,29 @@ export function RequestCannonForm() {
             )}
           />
         )}
+        
+        <FormField
+          control={form.control}
+          name="proxies"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Proxy List (Optional)</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="http://user:pass@host1:port\nhttp://host2:port\n..."
+                  className="resize-y h-24"
+                  {...field}
+                  disabled={isAttackRunning}
+                />
+              </FormControl>
+              <FormDescription>
+                Enter one proxy URL per line (e.g., http://user:pass@host:port or http://host:port).
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
 
         <FormField
           control={form.control}
