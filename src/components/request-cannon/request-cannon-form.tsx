@@ -54,8 +54,8 @@ const formSchema = z.object({
         return proxyEntryRegex.test(trimmedLine);
     });
   }, { message: "Satu atau lebih entri proksi tidak valid. Gunakan format host:port, IP:PORT, atau user:pass@host:port. Jangan sertakan skema http:// atau https://." }),
-  concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Maks 500").default(50),
-  rate: z.coerce.number().int().min(1, "Min 1").max(500, "Maks 500").default(50),
+  concurrency: z.coerce.number().int().min(1, "Min 1").max(1000, "Maks 1000").default(50),
+  rate: z.coerce.number().int().min(1, "Min 1").max(1000, "Maks 1000").default(50),
   duration: z.coerce.number().int().min(5, "Min 5d").max(60, "Maks 60d").default(10),
 });
 
@@ -288,7 +288,7 @@ export function RequestCannonForm() {
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder="https://api.proxyscrape.com/v2/?request=getproxies..."
+                placeholder="https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -356,7 +356,7 @@ export function RequestCannonForm() {
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={500}
+                  max={1000}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
@@ -379,7 +379,7 @@ export function RequestCannonForm() {
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={500}
+                  max={1000}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
@@ -439,3 +439,4 @@ export function RequestCannonForm() {
     </Form>
   );
 }
+

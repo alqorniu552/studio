@@ -51,8 +51,8 @@ export async function startFloodAttack(
      return { totalSent: 0, successful: 0, failed: 0, error: "URL target harus menggunakan protokol http atau https." };
   }
 
-  const safeConcurrency = Math.min(Math.max(1, concurrency ?? 50), 500);
-  const safeRate = Math.min(Math.max(1, rate ?? 50), 500);
+  const safeConcurrency = Math.min(Math.max(1, concurrency ?? 50), 1000);
+  const safeRate = Math.min(Math.max(1, rate ?? 50), 1000);
   const safeDuration = Math.min(Math.max(5, durationInSeconds ?? 10), 60);
 
   if (safeConcurrency <= 0 || safeRate <= 0 || safeDuration <=0) {
@@ -376,3 +376,4 @@ export async function checkProxies(proxiesString: string): Promise<{
     totalChecked: proxyEntries.length,
   };
 }
+
