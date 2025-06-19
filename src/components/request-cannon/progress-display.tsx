@@ -4,14 +4,14 @@
 import type { FloodStats } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree, WifiOff, ServerCrash, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ProgressDisplayProps {
   isLoading: boolean;
   stats: FloodStats | null;
   error: string | null;
-  attackDuration?: number | null; 
+  attackDuration?: number | null;
 }
 
 const renderStatusCodeLabel = (code: number): string => {
@@ -19,6 +19,46 @@ const renderStatusCodeLabel = (code: number): string => {
   if (code === -1) return "Network/Proxy Err";
   return `HTTP ${code}`;
 };
+
+function getTargetNetworkStatusSummary(stats: FloodStats | null): { text: string; icon?: React.ElementType; colorClass?: string } {
+  if (!stats || stats.totalSent === 0) {
+    return { text: "Target status unclear (no requests sent or data missing)." };
+  }
+
+  const { totalSent, successful, statusCodeCounts = {} } = stats;
+  const successfulRate = totalSent > 0 ? successful / totalSent : 0;
+  const timeoutCount = statusCodeCounts[0] || 0;
+  const networkErrorCount = statusCodeCounts[-1] || 0;
+
+  let serverErrorCount = 0;
+  Object.entries(statusCodeCounts).forEach(([code, count]) => {
+    const numericCode = parseInt(code);
+    if (numericCode >= 500 && numericCode <= 599) {
+      serverErrorCount += count;
+    }
+  });
+
+  const criticalFailureRate = totalSent > 0 ? (timeoutCount + networkErrorCount) / totalSent : 0;
+  const serverErrorRate = totalSent > 0 ? serverErrorCount / totalSent : 0;
+
+  if (criticalFailureRate > 0.7) {
+    return { text: "Target: Largely Unresponsive or Significant Network Issues", icon: WifiOff, colorClass: "text-red-500" };
+  }
+  if (serverErrorRate > 0.5) {
+    return { text: "Target: Experiencing High Server-Side Errors", icon: ServerCrash, colorClass: "text-yellow-500" };
+  }
+  if (successfulRate > 0.7) {
+    return { text: "Target: Appears Responsive", icon: CheckCircle, colorClass: "text-green-500" };
+  }
+  if (successfulRate > 0.4) {
+    return { text: "Target: Partially Responsive, Some Errors Detected", icon: AlertTriangle, colorClass: "text-yellow-600" };
+  }
+  if (totalSent > 0) { // If some requests were sent but didn't meet above criteria
+     return { text: "Target: Significant Errors or Low Responsiveness", icon: ShieldAlert, colorClass: "text-orange-500" };
+  }
+  return { text: "Target status indeterminate." }; // Fallback for edge cases
+}
+
 
 export function ProgressDisplay({ isLoading, stats, error, attackDuration }: ProgressDisplayProps) {
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
@@ -38,7 +78,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
         });
       }, 1000);
     } else {
-      setRemainingTime(null); 
+      setRemainingTime(null);
     }
 
     return () => {
@@ -52,6 +92,8 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
   if (!isLoading && !stats && !error) {
     return null;
   }
+
+  const targetStatusSummary = !isLoading && stats && !stats.error ? getTargetNetworkStatusSummary(stats) : null;
 
   return (
     <Card className="mt-6 bg-card/50 shadow-md">
@@ -91,10 +133,18 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
 
         {!isLoading && stats && !stats.error && (
           <div className="space-y-3 text-foreground">
-            <p className="text-xl font-semibold text-primary flex items-center justify-center">
-              <CheckCircle className="mr-2 h-7 w-7 text-green-500" />
-              Attack Completed!
-            </p>
+            <div className="text-center mb-3">
+              <p className="text-xl font-semibold text-primary flex items-center justify-center">
+                <CheckCircle className="mr-2 h-7 w-7 text-green-500" />
+                Attack Completed!
+              </p>
+              {targetStatusSummary && (
+                <div className={`mt-2 flex items-center justify-center text-md font-medium ${targetStatusSummary.colorClass ?? 'text-foreground'}`}>
+                  {targetStatusSummary.icon && <targetStatusSummary.icon className="mr-2 h-5 w-5" />}
+                  <span>{targetStatusSummary.text}</span>
+                </div>
+              )}
+            </div>
             <Separator />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
               <div className="flex flex-col items-center p-3 bg-muted rounded-md shadow-inner">
@@ -122,7 +172,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
                   </h4>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm max-h-48 overflow-y-auto">
                     {Object.entries(stats.statusCodeCounts)
-                      .sort(([aCode], [bCode]) => parseInt(aCode) - parseInt(bCode)) 
+                      .sort(([aCode], [bCode]) => parseInt(aCode) - parseInt(bCode))
                       .map(([code, count]) => (
                         <div key={code} className="p-2 bg-muted/70 rounded-md flex justify-between items-center shadow-sm">
                           <span className="font-medium text-foreground">
@@ -132,12 +182,15 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
                         </div>
                       ))}
                   </div>
+                   <p className="text-xs text-muted-foreground pt-1">
+                    Note: "Timeout/Abort" and "Network/Proxy Err" indicate issues reaching the target or responses not received in time. 5xx codes are server errors from the target.
+                  </p>
                 </div>
               </>
             )}
           </div>
         )}
-         {!isLoading && stats && stats.error && !error && ( 
+         {!isLoading && stats && stats.error && !error && (
           <div className="flex items-center text-destructive text-lg p-4 bg-destructive/10 rounded-md">
             <AlertCircle className="mr-3 h-6 w-6" />
             <span className="font-medium">Error: {stats.error}</span>
@@ -147,3 +200,4 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
     </Card>
   );
 }
+
