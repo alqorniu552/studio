@@ -32,7 +32,10 @@ import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, F
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
-const proxyEntryRegex = /^(([^:]+:[^@]+@)?([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))(:[0-9]{1,5})$/;
+// Regex to validate proxy entries like: host:port, IP:PORT, user:pass@host:port, user:pass@IP:PORT
+// It ensures no http:// or https:// schemes.
+const proxyEntryRegex = /^(?:([^:]+:[^@]+@)?)?(?:([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))(:[0-9]{1,5})$/;
+
 
 const formSchema = z.object({
   targetUrl: z.string().url({ message: "Please enter a valid URL (e.g., http://example.com or https://example.com)." }),
@@ -40,11 +43,16 @@ const formSchema = z.object({
   headers: z.string().optional(),
   body: z.string().optional(),
   proxies: z.string().optional().refine(val => {
-    if (!val || val.trim() === "") return true;
+    if (!val || val.trim() === "") return true; // Optional field
     return val.split('\n').filter(line => line.trim() !== "").every(line => {
-        return proxyEntryRegex.test(line.trim());
+        const trimmedLine = line.trim();
+        // Check if the line starts with http:// or https://
+        if (trimmedLine.startsWith("http://") || trimmedLine.startsWith("https://")) {
+            return false; // Invalid if scheme is present
+        }
+        return proxyEntryRegex.test(trimmedLine);
     });
-  }, { message: "One or more proxy entries are not in the recognized format (e.g., host:port, IP:PORT, or user:pass@host:port). Do not include http:// or https://." }),
+  }, { message: "One or more proxy entries are invalid. Use host:port, IP:PORT, or user:pass@host:port format. Do not include http:// or https:// schemes." }),
   concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
@@ -55,10 +63,10 @@ type FormValues = z.infer<typeof formSchema>;
 const METHODS_WITH_BODY: readonly string[] = ["POST", "PUT", "PATCH"];
 
 export function RequestCannonForm() {
-  const [isFlooding, setIsFlooding] = useState(false); // Used to control overall UI disable state for attack
+  const [isFlooding, setIsFlooding] = useState(false); 
   const [stats, setStats] = useState<FloodStats | null>(null);
   const [currentError, setCurrentError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition(); // Specific to the server action transition
+  const [isPending, startTransition] = useTransition(); 
   const { toast } = useToast();
 
   const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt");
@@ -85,16 +93,12 @@ export function RequestCannonForm() {
   const currentProxies = form.watch("proxies");
 
   const onSubmit = (values: FormValues) => {
-    // Note: isFlooding state is set true immediately, isPending becomes true when startTransition starts.
-    // We primarily use isPending to reflect the server action's busy state.
     if (isFlooding && isPending) {
       toast({ title: "Flood Stop Requested", description: "The attack will complete its current duration on the server." });
-      // Potentially, one might implement a server-side cancellation token here if the backend supports it.
-      // For now, we let the current server action complete.
       return;
     }
 
-    setIsFlooding(true); // Disable form fields immediately
+    setIsFlooding(true); 
     setStats(null);
     setCurrentError(null);
     setCurrentAttackDuration(values.duration);
@@ -121,11 +125,11 @@ export function RequestCannonForm() {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
         setCurrentError(errorMessage);
-        setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage }); // Ensure stats reflects error
+        setStats({ totalSent: 0, successful: 0, failed: 0, error: errorMessage }); 
         toast({ variant: "destructive", title: "Failed to Start Flood", description: errorMessage });
       } finally {
-         setIsFlooding(false); // Re-enable form fields once server action is done
-         setCurrentAttackDuration(null); // Clear duration after attack finishes or fails
+         setIsFlooding(false); 
+         setCurrentAttackDuration(null); 
       }
     });
   };
@@ -142,8 +146,9 @@ export function RequestCannonForm() {
       if (result.error) {
         toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: result.error, duration: 5000 });
       } else if (result.proxies) {
+        // The fetchProxiesFromUrl action already strips schemes.
         form.setValue("proxies", result.proxies, { shouldValidate: true });
-        toast({ title: "Proxies Fetched", description: "Proxy list populated. Ensure they are in host:port format and consider checking them." });
+        toast({ title: "Proxies Fetched", description: "Proxy list populated. Ensure they are in host:port or IP:PORT format and consider checking them." });
       } else {
         toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: "Received no proxies or an unexpected response.", duration: 5000 });
       }
@@ -161,6 +166,12 @@ export function RequestCannonForm() {
       toast({ variant: "destructive", title: "No Proxies", description: "Proxy list is empty. Nothing to check." });
       return;
     }
+    // Preliminary client-side check for schemes before sending to server
+    if (proxiesToTest.split('\n').some(line => line.trim().startsWith("http://") || line.trim().startsWith("https://"))) {
+        toast({ variant: "destructive", title: "Invalid Proxy Format", description: "Proxy list should not contain http:// or https:// schemes. Please remove them before checking.", duration: 7000});
+        return;
+    }
+
     setIsCheckingProxies(true);
     setCurrentError(null);
     toast({ title: "Checking Proxies", description: "This may take a moment depending on the number of proxies..." });
@@ -243,7 +254,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Enter one header per line in Key: Value format.
+                Enter one header per line in Key: Value format. If User-Agent is not specified, one may be chosen automatically.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -282,7 +293,7 @@ export function RequestCannonForm() {
                 aria-label="Proxy API URL"
             />
             <FormDescription>
-            Enter a URL that returns a plain text list of proxies (one per line, e.g. IP:PORT).
+            Enter a URL that returns a plain text list of proxies (one per line, e.g. IP:PORT). Schemes (http://) will be stripped.
             </FormDescription>
         </div>
 
@@ -302,7 +313,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Enter one proxy per line (e.g., myproxy.com:8080, 1.2.3.4:8888, or user:pass@proxy.example.com:3128). Do not include http:// or https://.
+                Enter one proxy per line (e.g., myproxy.com:8080, 1.2.3.4:8888, or user:pass@proxy.example.com:3128). Do not include http:// or https:// schemes.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -405,14 +416,14 @@ export function RequestCannonForm() {
           type="submit" 
           className="w-full" 
           disabled={isAnyOperationActive}
-          variant={isPending ? "destructive" : "default"} // Use isPending for attack button visual state
+          variant={isPending ? "destructive" : "default"} 
         >
           {isPending ? <StopCircle className="mr-2 h-4 w-4 animate-pulse" /> : <PlayCircle className="mr-2 h-4 w-4" />}
           {isPending ? "Attack in Progress..." : "Start Attack"}
         </Button>
       </form>
 
-      {(isPending || stats || currentError) && ( // Show ProgressDisplay if attack is pending, or if there are stats/errors
+      {(isPending || stats || currentError) && ( 
         <div className="mt-8">
           <ProgressDisplay
             isLoading={isPending}
