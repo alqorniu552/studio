@@ -5,13 +5,13 @@ import type { FloodStats } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree, WifiOff, ServerCrash, AlertTriangle, ShieldAlert, Network } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree, WifiOff, ServerCrash, AlertTriangle, ShieldAlert, Network, ShieldQuestion } from "lucide-react"; // Added ShieldQuestion
 import { useEffect, useState } from "react";
 
 interface ProgressDisplayProps {
   isLoading: boolean;
   stats: FloodStats | null;
-  error: string | null;
+  error: string | null; // This is for errors caught by the form's transition handler
   attackDuration?: number | null;
 }
 
@@ -132,10 +132,19 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
           </div>
         )}
 
+        {/* This 'error' is from the form's useTransition catch block (e.g., if startFloodAttack itself throws an unrecoverable error) */}
         {!isLoading && error && (
           <div className="flex items-center text-destructive text-lg p-4 bg-destructive/10 rounded-md">
             <AlertCircle className="mr-3 h-6 w-6" />
-            <span className="font-medium">Kesalahan: {error}</span>
+            <span className="font-medium">Kesalahan Kritis Operasi: {error}</span>
+          </div>
+        )}
+
+        {/* This 'stats.error' is from the FloodStats object, meaning the flood action ran but reported an error in its own execution */}
+         {!isLoading && stats && stats.error && !error && (
+          <div className="flex items-center text-destructive text-lg p-4 bg-destructive/10 rounded-md">
+            <AlertCircle className="mr-3 h-6 w-6" />
+            <span className="font-medium">Kesalahan Selama Serangan: {stats.error}</span>
           </div>
         )}
 
@@ -225,15 +234,7 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
             )}
           </div>
         )}
-         {!isLoading && stats && stats.error && !error && (
-          <div className="flex items-center text-destructive text-lg p-4 bg-destructive/10 rounded-md">
-            <AlertCircle className="mr-3 h-6 w-6" />
-            <span className="font-medium">Kesalahan: {stats.error}</span>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
 }
-
-    
