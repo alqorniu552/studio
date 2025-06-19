@@ -32,6 +32,10 @@ import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, F
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
+// Regex for host:port or ip:port, optionally prefixed with user:pass@
+// Does NOT allow http:// or https:// schemes.
+const proxyEntryRegex = /^(([^:]+:[^@]+@)?([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))(:[0-9]{1,5})$/;
+
 const formSchema = z.object({
   targetUrl: z.string().url({ message: "Please enter a valid URL (e.g., http://example.com or https://example.com)." }),
   method: z.enum(HTTP_METHODS).default("GET"),
@@ -40,12 +44,9 @@ const formSchema = z.object({
   proxies: z.string().optional().refine(val => {
     if (!val || val.trim() === "") return true; 
     return val.split('\n').filter(line => line.trim() !== "").every(line => {
-        const trimmedLine = line.trim();
-        // Allow http(s)://user:pass@host:port, http(s)://host:port, host:port, ip:port
-        return /^((http(s)?:\/\/)?(([^:]+:[^@]+@)?))?[a-zA-Z0-9.-]+(:[0-9]{1,5})$/.test(trimmedLine) || // host:port with optional scheme/auth
-               /^((http(s)?:\/\/)?(([^:]+:[^@]+@)?))?\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:[0-9]{1,5})$/.test(trimmedLine); // ip:port with optional scheme/auth
+        return proxyEntryRegex.test(line.trim());
     });
-  }, { message: "One or more proxy entries are not in a recognized format (e.g., [http://[user:pass@]]host:port or IP:PORT)." }),
+  }, { message: "One or more proxy entries are not in a recognized format (e.g., host:port, IP:PORT, or user:pass@host:port). Do not include http:// or https://." }),
   concurrency: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   rate: z.coerce.number().int().min(1, "Min 1").max(500, "Max 500").default(50),
   duration: z.coerce.number().int().min(5, "Min 5s").max(60, "Max 60s").default(10),
@@ -137,7 +138,7 @@ export function RequestCannonForm() {
         toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: result.error, duration: 5000 });
       } else if (result.proxies) {
         form.setValue("proxies", result.proxies, { shouldValidate: true });
-        toast({ title: "Proxies Fetched", description: "Proxy list populated. Consider checking them for validity." });
+        toast({ title: "Proxies Fetched", description: "Proxy list populated. Ensure they are in host:port format and consider checking them." });
       } else {
         toast({ variant: "destructive", title: "Failed to Fetch Proxies", description: "Received no proxies or an unexpected response.", duration: 5000 });
       }
@@ -160,9 +161,11 @@ export function RequestCannonForm() {
     toast({ title: "Checking Proxies", description: "This may take a moment depending on the number of proxies..." });
     try {
       const result = await checkProxies(proxiesToTest);
-      if (result.error) {
+      if (result.error && result.totalChecked === 0) { // Specific error for no valid proxies to check
+         toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
+      } else if (result.error) {
         toast({ variant: "destructive", title: "Proxy Check Error", description: result.error, duration: 5000 });
-      } else {
+      }else {
         form.setValue("proxies", result.liveProxiesString, { shouldValidate: true });
         toast({
           title: "Proxy Check Completed",
@@ -275,7 +278,7 @@ export function RequestCannonForm() {
                 aria-label="Proxy API URL"
             />
             <FormDescription>
-            Enter a URL that returns a plain text list of proxies (one per line). Default is a Proxyscrape free HTTP endpoint.
+            Enter a URL that returns a plain text list of proxies (one per line, e.g. IP:PORT).
             </FormDescription>
         </div>
 
@@ -287,7 +290,7 @@ export function RequestCannonForm() {
               <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Proxy List (Optional)</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="http://user:pass@host1:port\nhttp://host2:port\n..."
+                  placeholder="user:pass@host1.com:port\n123.45.67.89:8080\nproxy.example.com:3128"
                   className="resize-y h-24"
                   {...field}
                   disabled={isAttackRunning || isFetchingProxies || isCheckingProxies}
@@ -295,7 +298,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Enter one proxy URL per line (e.g., IP:PORT, HOST:PORT, or full http(s)://user:pass@host:port).
+                Enter one proxy per line (e.g., myproxy.com:8080, 1.2.3.4:8888, or user:pass@proxy.example.com:3128). Do not include http:// or https://.
               </FormDescription>
               <FormMessage />
             </FormItem>
