@@ -20,7 +20,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -244,16 +247,19 @@ export function RequestCannonForm() {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <optgroup label="HTTP (Versi Otomatis)">
+                  <SelectGroup>
+                    <SelectLabel>HTTP (Versi Otomatis)</SelectLabel>
                     {HTTP_METHODS_BASE.map((method) => (
                       <SelectItem key={method} value={method}>{method}</SelectItem>
                     ))}
-                  </optgroup>
-                  <optgroup label="HTTP/1.1 (Coba Paksa)">
+                  </SelectGroup>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>HTTP/1.1 (Coba Paksa)</SelectLabel>
                     {HTTP_METHODS_V1_1.map((method) => (
                       <SelectItem key={method} value={method}>{method}</SelectItem>
                     ))}
-                  </optgroup>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
               <FormDescription>
@@ -461,5 +467,3 @@ export function RequestCannonForm() {
     </Form>
   );
 }
-
-    
