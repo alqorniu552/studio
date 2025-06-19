@@ -1,3 +1,4 @@
+
 import type {Metadata} from 'next';
 import '../globals.css'; // Menggunakan globals.css yang sama
 import { Toaster } from "@/components/ui/toaster";
@@ -19,7 +20,7 @@ export default function AdminLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
       </head>
-      <body className="font-body antialiased min-h-screen flex flex-col bg-background">
+      <body className="font-body antialiased min-h-screen flex flex-col">
         {/* Di sini bisa ditambahkan header atau sidebar khusus admin di masa depan */}
         <main className="flex-1 p-4 sm:p-6 md:p-8">
           {children}
