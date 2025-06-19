@@ -21,7 +21,7 @@ export default function Home() {
         </CardContent>
       </Card>
       <footer className="mt-8 text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Meriam Permintaan. Hanya untuk tujuan edukasi.</p>
+        <p>&copy; {new Date().getFullYear()} Meriam Permintaan. Dibuat oleh Tirta Sadewa. Hanya untuk tujuan edukasi.</p>
       </footer>
     </main>
   );
