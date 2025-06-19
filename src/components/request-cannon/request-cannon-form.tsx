@@ -63,7 +63,7 @@ export function RequestCannonForm() {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&protocol=http&proxy_format=ipport&format=text&status=alive&anonymity=elite");
+  const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt");
   const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
   const [isCheckingProxies, setIsCheckingProxies] = useState<boolean>(false);
 
@@ -268,7 +268,7 @@ export function RequestCannonForm() {
         )}
         
         <div className="space-y-2">
-            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />Proxy API URL (e.g., Proxyscrape)</FormLabel>
+            <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />Proxy API URL</FormLabel>
             <Input
                 placeholder="Enter proxy list API URL"
                 value={proxyApiUrl}
