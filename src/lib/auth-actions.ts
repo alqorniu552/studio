@@ -138,12 +138,7 @@ export async function register(credentials: RegisterCredentials): Promise<Action
     users.push(newUser);
     await writeUsers(users);
 
-    // Create session
-    const expires = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
-    const sessionPayload = { user: { id: newUser.id, email: newUser.email }, expires };
-    const session = await encrypt(sessionPayload);
-
-    cookies().set('session', session, { expires, httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' });
+    // Session is no longer created on registration.
     
     return { success: true };
   } catch (error: any) {

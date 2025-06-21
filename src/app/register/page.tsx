@@ -28,10 +28,9 @@ export default function RegisterPage() {
       if(result.success) {
         toast({
           title: "Pendaftaran Berhasil",
-          description: "Anda sekarang akan diarahkan ke halaman utama.",
+          description: "Akun Anda telah dibuat. Silakan login.",
         });
-        router.push("/");
-        router.refresh(); // Force a refresh to update server-side state
+        router.push("/login");
       } else {
         toast({
           variant: "destructive",
