@@ -65,6 +65,7 @@ export default function AdminDashboardPage() {
   const [ipError, setIpError] = useState<string | null>(null);
   const [isFetchingIp, setIsFetchingIp] = useState(true);
   const [securityAlerts, setSecurityAlerts] = useState<string[]>([]);
+  const [activeProxyCount, setActiveProxyCount] = useState<number | null>(null);
 
   useEffect(() => {
     // Load manual attack history from localStorage
@@ -191,6 +192,10 @@ export default function AdminDashboardPage() {
         autoAttackProxyApiUrl.trim() ? autoAttackProxyApiUrl : undefined  // proxyApiUrl
       );
 
+      if (result.proxiesUsed !== undefined) {
+        setActiveProxyCount(result.proxiesUsed);
+      }
+
       const statusText = result.error ? `Error: ${result.error}` : `Selesai. Terkirim: ${result.totalSent}, Sukses: ${result.successful}, Gagal: ${result.failed}`;
       addAutoAttackLogEntry({
         target: autoAttackTargetUrl,
@@ -304,13 +309,17 @@ export default function AdminDashboardPage() {
         </Card>
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Proxy Aktif (Contoh)</CardTitle>
+            <CardTitle className="text-sm font-medium">Proksi Aktif (Otomatis)</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">573</div>
+            {activeProxyCount === null ? (
+              <div className="text-2xl font-bold animate-pulse">-</div>
+            ) : (
+              <div className="text-2xl font-bold">{activeProxyCount.toLocaleString()}</div>
+            )}
             <p className="text-xs text-muted-foreground">
-              Data statis untuk demonstrasi.
+              Digunakan pada serangan otomatis terakhir.
             </p>
           </CardContent>
         </Card>
@@ -531,4 +540,5 @@ export default function AdminDashboardPage() {
     
 
     
+
 

