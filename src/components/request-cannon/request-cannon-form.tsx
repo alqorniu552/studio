@@ -69,8 +69,8 @@ const formSchema = z.object({
         return proxyEntryRegex.test(trimmedLine);
     });
   }, { message: "Satu atau lebih entri proksi tidak valid. Gunakan format host:port, IP:PORT, atau user:pass@host:port. Jangan sertakan skema http:// atau https://." }),
-  concurrency: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20.000").default(50),
-  rate: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20.000").default(50),
+  concurrency: z.coerce.number().int().min(1, "Min 1").max(50000, "Maks 50.000").default(50),
+  rate: z.coerce.number().int().min(1, "Min 1").max(50000, "Maks 50.000").default(50),
   duration: z.coerce.number().int().min(5, "Min 5d").max(60, "Maks 60d").default(10),
 });
 
@@ -412,7 +412,7 @@ User-Agent: MyCustomAgent/1.0"
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder="https://api.proxyscrape.com/?request=getproxies&proxytype=http&timeout=10000&country=all&ssl=all&anonymity=all"
+                placeholder="https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -482,7 +482,7 @@ proxy.example.com:3128"
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={20000}
+                  max={50000}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
@@ -490,6 +490,9 @@ proxy.example.com:3128"
                   {...restField}
                 />
               </FormControl>
+               <FormDescription>
+                Jumlah maksimum permintaan yang diizinkan untuk berjalan secara paralel.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -505,7 +508,7 @@ proxy.example.com:3128"
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={20000}
+                  max={50000}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
@@ -513,6 +516,9 @@ proxy.example.com:3128"
                   {...restField}
                 />
               </FormControl>
+              <FormDescription>
+                Jumlah permintaan yang ditargetkan untuk dikirim per detik. Tingkat pengiriman aktual mungkin dibatasi oleh sumber daya server dan latensi jaringan.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
