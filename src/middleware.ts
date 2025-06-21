@@ -1,30 +1,59 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { jwtVerify } from 'jose';
+
+// This function checks if the user is authenticated
+async function verifySession(token: string | undefined): Promise<boolean> {
+  if (!token) {
+    return false;
+  }
+  
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.error('JWT_SECRET tidak diatur. Verifikasi sesi akan gagal.');
+    return false;
+  }
+
+  try {
+    const key = new TextEncoder().encode(secret);
+    await jwtVerify(token, key, { algorithms: ['HS256'] });
+    return true;
+  } catch (error) {
+    console.log('Verifikasi sesi gagal:', error);
+    return false;
+  }
+}
+
 
 export async function middleware(request: NextRequest) {
   const session = request.cookies.get('session')?.value;
+  const isLoggedIn = await verifySession(session);
   const { pathname } = request.nextUrl;
 
   const isAuthPage = pathname === '/login' || pathname === '/register';
-  const isProtectedRoute = pathname === '/' || pathname === '/admin';
+  const isProtectedRoute = pathname === '/' || pathname.startsWith('/admin');
 
-  // If the user is logged in and trying to access a login/register page,
-  // redirect them to the home page.
-  if (session && isAuthPage) {
+  // Jika sudah login dan mencoba mengakses halaman login/register, arahkan ke home
+  if (isLoggedIn && isAuthPage) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // If the user is not logged in and trying to access a protected page,
-  // redirect them to the login page.
-  if (!session && isProtectedRoute) {
+  // Jika belum login dan mencoba mengakses halaman yang dilindungi, arahkan ke login
+  if (!isLoggedIn && isProtectedRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Otherwise, allow the request to proceed.
+  // Izinkan permintaan jika tidak ada aturan yang cocok
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/', '/admin', '/login', '/register'],
+  matcher: [
+    // Terapkan middleware ke semua rute ini
+    '/',
+    '/admin/:path*',
+    '/login',
+    '/register',
+  ],
 };

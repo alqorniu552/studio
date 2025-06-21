@@ -4,7 +4,7 @@ Ini adalah aplikasi Next.js yang berfungsi sebagai alat untuk melakukan serangan
 
 ## Fitur Utama
 
--   **Otentikasi Pengguna:** Sistem pendaftaran dan login yang aman untuk melindungi akses ke aplikasi.
+-   **Otentikasi Pengguna:** Sistem pendaftaran dan login yang aman untuk melindungi akses ke aplikasi, berjalan sepenuhnya di server aplikasi.
 -   **Konfigurasi Serangan Fleksibel:** Atur URL target, metode HTTP, header kustom, dan isi permintaan.
 -   **Kontrol Beban:** Sesuaikan jumlah permintaan bersamaan (konkurensi) dan tingkat permintaan per detik (RPS).
 -   **Dukungan Proksi Dinamis:** Gunakan proksi dari daftar statis atau perbarui secara dinamis dari URL API selama serangan berlangsung.
@@ -24,24 +24,14 @@ Pastikan server Anda telah menginstal perangkat lunak berikut:
 -   **Node.js** (versi 18.x atau lebih baru direkomendasikan)
 -   **npm** (biasanya terinstal bersama Node.js)
 -   `git` (untuk mengkloning repositori)
--   **Konfigurasi Firebase:** Anda harus membuat proyek Firebase dan mendapatkan kredensial untuk Firebase Authentication. Buat file `.env.local` di root proyek dan tambahkan variabel berikut:
+-   **Konfigurasi Lingkungan:** Anda harus membuat file `.env.local` di root proyek. File ini akan berisi kunci rahasia untuk mengamankan sesi pengguna.
 
     ```
-    # Firebase Client SDK Config (find these in your Firebase project settings)
-    NEXT_PUBLIC_FIREBASE_API_KEY=...
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-    NEXT_PUBLIC_FIREBASE_APP_ID=...
-
-    # Firebase Admin SDK Config (for server-side session management)
-    # Generate a service account key file in Firebase (Project settings -> Service accounts)
-    FIREBASE_PROJECT_ID=...
-    FIREBASE_CLIENT_EMAIL=...
-    # Copy the private key, and ensure it's on a single line with \n for newlines
-    FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+    # Secret key untuk menandatangani sesi JWT (JSON Web Token)
+    # Anda bisa membuat kunci acak yang kuat menggunakan perintah `openssl rand -base64 32` di terminal
+    JWT_SECRET=kunci_rahasia_anda_yang_sangat_aman_disini
     ```
+    Data pengguna disimpan dalam file `data/users.json` di dalam direktori proyek.
 
 ### Langkah-langkah Deployment
 

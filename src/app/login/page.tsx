@@ -2,17 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, isFirebaseClientConfigured } from "@/lib/firebase";
-import { createSessionCookie } from "@/lib/auth-actions";
+import { login } from "@/lib/auth-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import Link from 'next/link';
-import { LogIn, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,62 +18,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  if (!isFirebaseClientConfigured) {
-    return (
-        <main className="flex flex-1 flex-col items-center justify-center p-4 sm:p-6 md:p-8 bg-background">
-            <Card className="w-full max-w-md shadow-2xl">
-                <CardHeader className="text-center">
-                    <CardTitle className="text-2xl flex items-center justify-center"><AlertCircle className="mr-2 text-destructive"/>Kesalahan Konfigurasi</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Konfigurasi Firebase Klien Hilang</AlertTitle>
-                        <AlertDescription>
-                            Aplikasi tidak dapat terhubung ke Firebase karena kredensial klien (client-side) tidak diatur.
-                            <br/><br/>
-                            Silakan periksa apakah file <strong>.env.local</strong> Anda ada dan berisi semua variabel <strong>NEXT_PUBLIC_FIREBASE_*</strong> yang diperlukan seperti yang dijelaskan dalam file README.md.
-                        </AlertDescription>
-                    </Alert>
-                </CardContent>
-                 <CardFooter className="flex flex-col gap-4">
-                    <p className="text-sm text-muted-foreground">
-                      Belum punya akun?{" "}
-                      <span className="underline text-primary cursor-not-allowed">
-                        Daftar di sini
-                      </span>
-                    </p>
-                </CardFooter>
-            </Card>
-        </main>
-    );
-  }
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth!, email, password);
-      const idToken = await userCredential.user.getIdToken();
+      const result = await login({ email, password });
       
-      const result = await createSessionCookie(idToken);
       if(result.success) {
         router.push("/");
+        router.refresh(); // Force a refresh to update server-side state like the header
       } else {
-        // This handles server-side session creation errors, including config issues.
         toast({
           variant: "destructive",
           title: "Login Gagal",
-          description: result.error || "Terjadi kesalahan saat membuat sesi server.",
+          description: result.error || "Terjadi kesalahan. Silakan coba lagi.",
         });
       }
     } catch (error: any) {
-      // This catches client-side errors like wrong password.
       toast({
         variant: "destructive",
         title: "Login Gagal",
-        description: error.message?.replace('Firebase: ', '') || "Terjadi kesalahan. Silakan coba lagi.",
+        description: "Terjadi kesalahan tak terduga di server.",
       });
     } finally {
       setIsLoading(false);
