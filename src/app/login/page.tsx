@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -26,7 +27,7 @@ export default function LoginPage() {
       const result = await login({ email, password });
       
       if(result.success) {
-        router.push("/"); // Arahkan ke halaman utama
+        router.push("/admin"); // Arahkan ke dasbor admin
       } else {
         toast({
           variant: "destructive",

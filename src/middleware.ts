@@ -34,9 +34,9 @@ export async function middleware(request: NextRequest) {
   const isAuthPage = pathname === '/login' || pathname === '/register';
   const isProtectedRoute = pathname === '/' || pathname.startsWith('/admin');
 
-  // Jika sudah login dan mencoba mengakses halaman login/register, arahkan ke home
+  // Jika sudah login dan mencoba mengakses halaman login/register, arahkan ke dasbor admin
   if (isLoggedIn && isAuthPage) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/admin', request.url));
   }
 
   // Jika belum login dan mencoba mengakses halaman yang dilindungi, arahkan ke login
