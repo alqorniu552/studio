@@ -1,10 +1,11 @@
+
 "use client";
 
 import type { FloodStats } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree, WifiOff, ServerCrash, AlertTriangle, ShieldAlert, Network, ShieldQuestion } from "lucide-react"; // Added ShieldQuestion
+import { Loader2, AlertCircle, CheckCircle, XCircle, BarChartBig, TimerIcon, ListTree, WifiOff, ServerCrash, AlertTriangle, ShieldAlert, Network, ShieldQuestion, ArrowRightLeft, TimerOff } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ProgressDisplayProps {
@@ -19,6 +20,18 @@ const renderStatusCodeLabel = (code: number): string => {
   if (code === -1) return "Kesalahan Jaringan/Proxy";
   return `HTTP ${code}`;
 };
+
+const renderStatusCodeIcon = (code: number): React.ReactElement => {
+  const iconClass = "mr-2 h-4 w-4 shrink-0";
+  if (code >= 200 && code < 300) return <CheckCircle className={`${iconClass} text-green-500`} />;
+  if (code >= 300 && code < 400) return <ArrowRightLeft className={`${iconClass} text-blue-500`} />;
+  if (code >= 400 && code < 500) return <ShieldAlert className={`${iconClass} text-yellow-500`} />;
+  if (code >= 500 && code < 600) return <ServerCrash className={`${iconClass} text-red-500`} />;
+  if (code === 0) return <TimerOff className={`${iconClass} text-muted-foreground`} />;
+  if (code === -1) return <WifiOff className={`${iconClass} text-red-600`} />;
+  return <ShieldQuestion className={`${iconClass} text-muted-foreground`} />;
+};
+
 
 interface TargetStatus {
   text: string;
@@ -213,17 +226,21 @@ export function ProgressDisplay({ isLoading, stats, error, attackDuration }: Pro
                     <ListTree className="mr-2 h-5 w-5" />
                     Rincian Kode Respons:
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm max-h-48 overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm max-h-48 overflow-y-auto p-1">
                     {Object.entries(stats.statusCodeCounts)
                       .sort(([aCode], [bCode]) => parseInt(aCode) - parseInt(bCode))
-                      .map(([code, count]) => (
-                        <div key={code} className="p-2 bg-muted/70 rounded-md flex justify-between items-center shadow-sm">
-                          <span className="font-medium text-foreground">
-                            {renderStatusCodeLabel(parseInt(code))}
-                          </span>
-                          <span className="font-bold text-primary">{count.toLocaleString()}</span>
-                        </div>
-                      ))}
+                      .map(([code, count]) => {
+                        const numericCode = parseInt(code);
+                        return (
+                          <div key={code} className="p-2 bg-muted/70 rounded-md flex justify-between items-center shadow-sm">
+                            <span className="font-medium text-foreground flex items-center">
+                              {renderStatusCodeIcon(numericCode)}
+                              {renderStatusCodeLabel(numericCode)}
+                            </span>
+                            <span className="font-bold text-primary">{count.toLocaleString()}</span>
+                          </div>
+                        );
+                      })}
                   </div>
                    <p className="text-xs text-muted-foreground pt-1">
                     Catatan: "Waktu Habis/Batal" dan "Kesalahan Jaringan/Proxy" menunjukkan masalah dalam mencapai target atau respons tidak diterima tepat waktu. Kode 5xx adalah kesalahan server dari target.
