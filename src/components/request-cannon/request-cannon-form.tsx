@@ -318,7 +318,7 @@ export function RequestCannonForm() {
                 <Input placeholder="https://contoh.com" {...field} disabled={isAnyOperationActive} />
               </FormControl>
               <FormDescription>
-                Untuk serangan logika bisnis, ini harus berupa endpoint API spesifik (misalnya, /api/redeem-coupon).
+                Untuk serangan logika bisnis, ini harus berupa endpoint API spesifik. Anda dapat menyertakan port kustom dalam URL (misalnya, `http://contoh.com:8080`).
               </FormDescription>
               <FormMessage />
             </FormItem>
