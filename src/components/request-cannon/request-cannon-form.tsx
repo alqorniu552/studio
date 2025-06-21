@@ -120,6 +120,7 @@ export function RequestCannonForm() {
   useEffect(() => {
     const baseMethod = getBaseMethod(selectedMethod);
     let defaultHeaders = '';
+    let defaultBody = '';
 
     const commonHeaders = [
         'Accept-Language: id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -138,16 +139,25 @@ export function RequestCannonForm() {
             'Accept: application/json, text/plain, */*',
             commonHeaders
         ].join('\n');
+        // Add default body for these methods
+        defaultBody = JSON.stringify({
+            "productId": "12345",
+            "quantity": 99999,
+            "couponCode": "EXPLOIT_ME"
+        }, null, 2);
     } else {
         // Headers for methods without a body (GET, DELETE, etc.)
         defaultHeaders = [
             'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             commonHeaders
         ].join('\n');
+        // Clear body for these methods
+        defaultBody = '';
     }
     
     // Set the value in the form
     setValue("headers", defaultHeaders, { shouldValidate: true, shouldDirty: true });
+    setValue("body", defaultBody, { shouldValidate: true, shouldDirty: true });
 
   }, [selectedMethod, setValue]);
 
@@ -359,7 +369,9 @@ export function RequestCannonForm() {
               <FormLabel className="flex items-center"><ListPlus className="mr-2 h-4 w-4" />Header Kustom (Otomatis)</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="Content-Type: application/json&#x0a;Authorization: Bearer token&#x0a;User-Agent: MyCustomAgent/1.0"
+                  placeholder="Content-Type: application/json
+Authorization: Bearer token
+User-Agent: MyCustomAgent/1.0"
                   className="resize-y"
                   {...field}
                   disabled={isAnyOperationActive}
@@ -379,7 +391,7 @@ export function RequestCannonForm() {
             name="body"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Isi Permintaan (Opsional untuk {getBaseMethod(selectedMethod)})</FormLabel>
+                <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />Isi Permintaan (Otomatis untuk {getBaseMethod(selectedMethod)})</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder='{"kunci": "nilai"}'
@@ -389,7 +401,7 @@ export function RequestCannonForm() {
                   />
                 </FormControl>
                 <FormDescription>
-                    Ini adalah tempat Anda membuat payload untuk serangan logika bisnis. Contoh: JSON untuk menambahkan item ke keranjang berulang kali, atau permintaan untuk menebus kupon tanpa batas.
+                    Isi permintaan ini dibuat secara otomatis. Ini adalah tempat Anda membuat payload untuk serangan logika bisnis. Contoh: JSON untuk menambahkan item ke keranjang berulang kali, atau permintaan untuk menebus kupon tanpa batas.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -400,7 +412,7 @@ export function RequestCannonForm() {
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder="https://api.proxyscrape.com/?request=getproxies&amp;proxytype=http&amp;timeout=10000&amp;country=all&amp;ssl=all&amp;anonymity=all"
+                placeholder="https://api.proxyscrape.com/?request=getproxies&proxytype=http&timeout=10000&country=all&ssl=all&anonymity=all"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -420,7 +432,9 @@ export function RequestCannonForm() {
               <FormLabel className="flex items-center"><ShieldQuestion className="mr-2 h-4 w-4" />Daftar Proksi (Opsional - Statis/Fallback)</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="user:pass@host1.com:port&#x0a;123.45.67.89:8080&#x0a;proxy.example.com:3128"
+                  placeholder="user:pass@host1.com:port
+123.45.67.89:8080
+proxy.example.com:3128"
                   className="resize-y h-24"
                   {...field}
                   disabled={isAnyOperationActive}
@@ -551,5 +565,3 @@ export function RequestCannonForm() {
     </Form>
   );
 }
-
-    
