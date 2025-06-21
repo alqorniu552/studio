@@ -133,13 +133,18 @@ export default function AdminDashboardPage() {
     
     const fetchIp = async () => {
       setIsFetchingIp(true);
-      const result = await getUserIpAddress();
-      if (result.ip) {
-        setUserIp(result.ip);
-      } else {
-        setIpError(result.error || "Alamat IP tidak dapat ditentukan.");
+      try {
+        const result = await getUserIpAddress();
+        if (result && result.ip) {
+          setUserIp(result.ip);
+        } else {
+          setIpError(result?.error || "Alamat IP tidak dapat ditentukan.");
+        }
+      } catch (e) {
+        setIpError("Gagal mengambil alamat IP.");
+      } finally {
+        setIsFetchingIp(false);
       }
-      setIsFetchingIp(false);
     };
     fetchIp();
   }, [fetchUsers]);
@@ -445,7 +450,7 @@ export default function AdminDashboardPage() {
             <CardContent className="space-y-4 text-sm">
               <div className="flex justify-between items-center"><span className="text-muted-foreground flex items-center"><BarChartHorizontal className="mr-2 h-4 w-4"/>Total Serangan Manual</span><span className="font-bold text-lg">{totalManualAttacks.toLocaleString()}</span></div>
               <div className="flex justify-between items-center"><span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4"/>Proksi Otomatis Terakhir</span>{activeProxyCount === null ? <span className="font-bold text-lg animate-pulse">-</span> : <span className="font-bold text-lg">{activeProxyCount.toLocaleString()}</span>}</div>
-              <div className="flex justify-between items-center"><span className="text-muted-foreground flex items-center"><Wifi className="mr-2 h-4 w-4"/>Alamat IP Anda</span>{isFetchingIp ? <span className="font-semibold animate-pulse">Memuat...</span> : userIp ? <span className="font-semibold">{userIp}</span> : <span className="font-semibold text-destructive">N/A</span>}</div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground flex items-center"><Wifi className="mr-2 h-4 w-4"/>Alamat IP Anda</span>{isFetchingIp ? <span className="font-semibold animate-pulse">Memuat...</span> : userIp ? <span className="font-semibold">{userIp}</span> : <span className="font-semibold text-destructive">{ipError || 'N/A'}</span>}</div>
             </CardContent>
           </Card>
           <Card>
@@ -492,3 +497,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
