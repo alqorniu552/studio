@@ -26,8 +26,7 @@ export default function LoginPage() {
       const result = await login({ email, password });
       
       if(result.success) {
-        router.push("/");
-        router.refresh(); // Force a refresh to update server-side state like the header
+        router.push("/"); // Arahkan ke halaman utama
       } else {
         toast({
           variant: "destructive",

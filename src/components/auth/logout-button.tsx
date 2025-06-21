@@ -17,8 +17,6 @@ export function LogoutButton() {
     await signOut();
     toast({ title: 'Logout Berhasil' });
     router.push('/login');
-    // We call refresh to ensure server components depending on the session are re-rendered.
-    router.refresh(); 
   };
 
   return (
