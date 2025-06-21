@@ -6,8 +6,14 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-const secretKey = process.env.JWT_SECRET;
-const key = new TextEncoder().encode(secretKey);
+const getSecretKey = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('Kunci Rahasia JWT tidak diatur dalam variabel lingkungan.');
+  }
+  return new TextEncoder().encode(secret);
+};
+
 
 interface SessionPayload {
   username: string;
@@ -19,17 +25,21 @@ export async function encrypt(payload: any) {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('1d') // Sesi berakhir dalam 1 hari
-    .sign(key);
+    .sign(getSecretKey());
 }
 
 export async function decrypt(session: string | undefined = '') {
+  if (!session) {
+    return null;
+  }
   try {
-    const { payload } = await jwtVerify<SessionPayload>(session, key, {
+    const { payload } = await jwtVerify<SessionPayload>(session, getSecretKey(), {
       algorithms: ['HS256'],
     });
     return payload;
   } catch (error) {
     // Ini bisa berupa token kedaluwarsa, token tidak valid, dll.
+    console.error('Gagal mendekripsi sesi:', error);
     return null;
   }
 }
