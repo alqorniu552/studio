@@ -272,6 +272,9 @@ export function RequestCannonForm() {
               <FormControl>
                 <Input placeholder="https://contoh.com" {...field} disabled={isAnyOperationActive} />
               </FormControl>
+              <FormDescription>
+                Untuk serangan logika bisnis, ini harus berupa endpoint API spesifik (misalnya, /api/redeem-coupon).
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -328,7 +331,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Masukkan satu header per baris (Kunci: Nilai). Untuk target yang dilindungi (misalnya oleh Cloudflare), pertimbangkan untuk menggunakan header browser yang realistis (misalnya, User-Agent, Accept-Language, Sec-CH-UA) dan gunakan proxy berkualitas tinggi. Jika User-Agent tidak ditentukan, agen pengguna acak akan dipilih dari daftar internal.
+                Masukkan satu header per baris (Kunci: Nilai). Untuk serangan logika bisnis, header penting mungkin termasuk `Authorization` untuk otentikasi atau `Cookie` untuk sesi. Untuk target yang dilindungi (misalnya Cloudflare), gunakan header browser yang realistis. Jika User-Agent tidak ditentukan, agen pengguna acak akan dipilih dari daftar internal.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -350,6 +353,9 @@ export function RequestCannonForm() {
                     disabled={isAnyOperationActive}
                   />
                 </FormControl>
+                <FormDescription>
+                    Ini adalah tempat Anda membuat payload untuk serangan logika bisnis. Contoh: JSON untuk menambahkan item ke keranjang berulang kali, atau permintaan untuk menebus kupon tanpa batas.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
