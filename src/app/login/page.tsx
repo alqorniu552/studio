@@ -27,7 +27,7 @@ export default function LoginPage() {
       const result = await login({ email, password });
       
       if(result.success) {
-        router.push("/admin"); // Arahkan ke dasbor admin
+        router.push("/dashboard"); // Arahkan ke dasbor pengguna
       } else {
         toast({
           variant: "destructive",

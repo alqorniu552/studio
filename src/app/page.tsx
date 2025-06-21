@@ -1,7 +1,7 @@
 
 import { RequestCannonForm } from '@/components/request-cannon/request-cannon-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Rocket, Shield } from 'lucide-react';
+import { Rocket, LayoutDashboard } from 'lucide-react';
 import { LogoutButton } from '@/components/auth/logout-button';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -15,10 +15,10 @@ export default function Home() {
           <h1 className="text-xl font-bold text-primary hidden sm:block">Flooder L7</h1>
         </div>
         <div className="flex items-center gap-2">
-            <Link href="/admin">
+            <Link href="/dashboard">
                 <Button variant="outline">
-                    <Shield className="mr-2 h-4 w-4"/>
-                    Admin
+                    <LayoutDashboard className="mr-2 h-4 w-4"/>
+                    Dasbor
                 </Button>
             </Link>
             <LogoutButton />

@@ -32,27 +32,29 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isAuthPage = pathname === '/login' || pathname === '/register';
-  const isProtectedRoute = pathname === '/' || pathname.startsWith('/admin');
+  // Protected routes now include /dashboard and /admin
+  const isProtectedRoute = pathname === '/' || pathname.startsWith('/dashboard') || pathname.startsWith('/admin');
 
-  // Jika sudah login dan mencoba mengakses halaman login/register, arahkan ke dasbor admin
+  // If already logged in and trying to access login/register, redirect to the user dashboard
   if (isLoggedIn && isAuthPage) {
-    return NextResponse.redirect(new URL('/admin', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Jika belum login dan mencoba mengakses halaman yang dilindungi, arahkan ke login
+  // If not logged in and trying to access a protected route, redirect to login
   if (!isLoggedIn && isProtectedRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Izinkan permintaan jika tidak ada aturan yang cocok
+  // Allow the request if no rules match
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    // Terapkan middleware ke semua rute ini
+    // Apply middleware to all these routes
     '/',
     '/admin/:path*',
+    '/dashboard/:path*', // Added dashboard path
     '/login',
     '/register',
   ],
