@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -353,7 +354,7 @@ export function RequestCannonForm() {
                 </SelectContent>
               </Select>
               <FormDescription>
-                Pilih metode HTTP. Opsi "HTTP/1.1" akan mencoba memaksa penggunaan HTTP/1.1. Opsi standar akan menggunakan negosiasi otomatis (bisa HTTP/1.1 atau HTTP/2 jika didukung server HTTPS).
+                Pilih metode HTTP. Serangan akan dikirim menggunakan HTTPS jika URL target dimulai dengan `https://`. Opsi 'HTTP/1.1' akan mencoba memaksa koneksi HTTP/1.1 (bahkan melalui HTTPS), yang berguna untuk menguji server yang mungkin memiliki kerentanan pada protokol yang lebih lama.
               </FormDescription>
               <FormMessage />
             </FormItem>
