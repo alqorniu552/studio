@@ -1,13 +1,13 @@
 
 import type {Metadata} from 'next';
 import { LogoutButton } from '@/components/auth/logout-button';
-import { Home, LayoutDashboard } from 'lucide-react';
+import { Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Panel Administrator - Flooder L7',
-  description: 'Halaman administrasi untuk Flooder L7.',
+  title: 'Dasbor Admin - Flooder L7',
+  description: 'Dasbor Administrasi untuk Flooder L7.',
 };
 
 export default function AdminLayout({
@@ -24,12 +24,6 @@ export default function AdminLayout({
                   <Button variant="outline">
                       <Home className="mr-2 h-4 w-4"/>
                       Home
-                  </Button>
-              </Link>
-               <Link href="/dashboard">
-                  <Button variant="outline">
-                      <LayoutDashboard className="mr-2 h-4 w-4"/>
-                      Dasbor Pengguna
                   </Button>
               </Link>
               <LogoutButton />

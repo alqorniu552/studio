@@ -14,16 +14,10 @@ export default function Home() {
           <h1 className="text-xl font-bold text-primary hidden sm:block">Flooder L7</h1>
         </div>
         <div className="flex items-center gap-2">
-            <Link href="/dashboard">
-                <Button variant="outline">
-                    <LayoutDashboard className="mr-2 h-4 w-4"/>
-                    Dasbor
-                </Button>
-            </Link>
             <Link href="/admin">
                 <Button variant="outline">
-                    <Shield className="mr-2 h-4 w-4"/>
-                    Admin
+                    <LayoutDashboard className="mr-2 h-4 w-4"/>
+                    Dasbor Admin
                 </Button>
             </Link>
         </div>

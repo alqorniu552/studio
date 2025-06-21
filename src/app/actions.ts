@@ -5,6 +5,8 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import https from 'node:https'; // Import the https module
 import { headers } from 'next/headers';
 import { USER_AGENTS } from "@/lib/user-agents";
+import { getUsers as authGetUsers } from "@/lib/auth-actions";
+
 
 export interface FloodStats {
   totalSent: number;
@@ -13,6 +15,10 @@ export interface FloodStats {
   error?: string;
   statusCodeCounts?: Record<number, number>;
   proxiesUsed?: number;
+}
+
+export async function getUsers() {
+    return authGetUsers();
 }
 
 const METHODS_WITHOUT_BODY_BASE = ["GET", "HEAD", "DELETE", "OPTIONS"];
