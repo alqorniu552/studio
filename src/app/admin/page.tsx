@@ -8,12 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BarChart2, Users, Settings, ShieldAlert, LayoutDashboard, History, CheckCircle, XCircle, AlertTriangle, Power, FileClock, Zap, Target as TargetIcon, Server as ServerIcon, RotateCw, Wifi, Globe } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
+import { 
+  Settings, ShieldAlert, LayoutDashboard, History, CheckCircle, XCircle, AlertTriangle, Power, FileClock, Zap, 
+  Target as TargetIcon, Server as ServerIcon, RotateCw, Wifi, Globe, BarChartHorizontal, Briefcase, Info, Users
+} from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { startFloodAttack, type FloodStats, getUserIpAddress } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 
-// Define the interface for attack history entries, can be moved to a shared types file later
+// Interfaces
 interface AttackHistoryEntry {
   id: string;
   dateTime: string;
@@ -45,9 +50,25 @@ interface AutoAttackLogEntry {
 const getStatusIcon = (status: string, error?: string): React.ReactElement => {
     if (error || status.toLowerCase() === "gagal") return <XCircle className="h-4 w-4 text-red-500" />;
     if (status.toLowerCase() === "selesai") return <CheckCircle className="h-4 w-4 text-green-500" />;
-    return <AlertTriangle className="h-4 w-4 text-yellow-500" />; // Default for other statuses like "Berjalan" or unknown
+    return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
 };
 
+type ChartData = {
+  name: string;
+  successful: number;
+  failed: number;
+};
+
+const chartConfig = {
+  successful: {
+    label: "Sukses",
+    color: "hsl(var(--chart-2))",
+  },
+  failed: {
+    label: "Gagal",
+    color: "hsl(var(--chart-5))",
+  },
+};
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
@@ -60,29 +81,40 @@ export default function AdminDashboardPage() {
   const [isAttacking, setIsAttacking] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [manualAttackHistory, setManualAttackHistory] = useState<AttackHistoryEntry[]>([]);
-  const [totalManualAttacks, setTotalManualAttacks] = useState(0);
   const [userIp, setUserIp] = useState<string | null>(null);
   const [ipError, setIpError] = useState<string | null>(null);
   const [isFetchingIp, setIsFetchingIp] = useState(true);
   const [securityAlerts, setSecurityAlerts] = useState<string[]>([]);
   const [activeProxyCount, setActiveProxyCount] = useState<number | null>(null);
+  const [chartData, setChartData] = useState<ChartData[]>([]);
 
   useEffect(() => {
-    // Load manual attack history from localStorage
     const storedHistory = localStorage.getItem(ATTACK_HISTORY_STORAGE_KEY);
+    let parsedHistory: AttackHistoryEntry[] = [];
     if (storedHistory) {
       try {
-        const parsedHistory = JSON.parse(storedHistory);
-        if (Array.isArray(parsedHistory)) {
-          setManualAttackHistory(parsedHistory);
-          setTotalManualAttacks(parsedHistory.length);
+        const history = JSON.parse(storedHistory);
+        if (Array.isArray(history)) {
+          parsedHistory = history;
+          setManualAttackHistory(history);
         }
       } catch (e) {
-        console.error("Failed to parse attack history from localStorage:", e);
+        console.error("Gagal mengurai riwayat serangan dari localStorage:", e);
       }
     }
 
-    // Fetch user IP
+    if (parsedHistory.length > 0) {
+      const dataForChart = parsedHistory
+        .slice(0, 5)
+        .reverse()
+        .map(attack => ({
+          name: new Date(attack.id).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          successful: attack.successful,
+          failed: attack.failed,
+        }));
+      setChartData(dataForChart);
+    }
+    
     const fetchIp = async () => {
       setIsFetchingIp(true);
       const result = await getUserIpAddress();
@@ -94,24 +126,21 @@ export default function AdminDashboardPage() {
       setIsFetchingIp(false);
     };
     fetchIp();
-
   }, []);
 
-  // Analyze history for security alerts
   useEffect(() => {
     const analyzeHistoryForAlerts = (history: AttackHistoryEntry[], logs: AutoAttackLogEntry[]): string[] => {
       const alerts: Set<string> = new Set();
-      const alertThreshold = 0.5; // 50%
+      const alertThreshold = 0.5;
 
       const getHostname = (url: string) => {
         try {
           return new URL(url).hostname;
         } catch (e) {
-          return url; // Fallback to full URL if parsing fails
+          return url;
         }
       };
 
-      // Analyze manual history
       history.forEach(attack => {
         if (attack.requestsSent > 20 && !attack.error) {
           const statusCodes = attack.statusCodeCounts || {};
@@ -122,36 +151,27 @@ export default function AdminDashboardPage() {
               serverErrorCount += count;
             }
           });
-
-          if ((wafCount / attack.requestsSent) > alertThreshold) {
-            alerts.add(`Potensi WAF/Rate Limit pada ${getHostname(attack.targetUrl)}`);
-          }
-          if ((serverErrorCount / attack.requestsSent) > alertThreshold) {
-            alerts.add(`Potensi ketidakstabilan server pada ${getHostname(attack.targetUrl)}`);
-          }
+          if ((wafCount / attack.requestsSent) > alertThreshold) alerts.add(`Potensi WAF pada ${getHostname(attack.targetUrl)}`);
+          if ((serverErrorCount / attack.requestsSent) > alertThreshold) alerts.add(`Server tidak stabil pada ${getHostname(attack.targetUrl)}`);
         } else if (attack.error) {
             alerts.add(`Serangan ke ${getHostname(attack.targetUrl)} gagal`);
         }
       });
 
-      // Analyze auto-attack logs
       logs.forEach(log => {
-        if (log.error) {
-          alerts.add(`Serangan otomatis ke ${getHostname(log.target)} gagal`);
-        }
+        if (log.error) alerts.add(`Otomatis: Gagal menyerang ${getHostname(log.target)}`);
       });
 
-      return Array.from(alerts).slice(0, 3); // Limit to 3 for display
+      return Array.from(alerts).slice(0, 3);
     };
 
     const newAlerts = analyzeHistoryForAlerts(manualAttackHistory, autoAttackLogs);
     setSecurityAlerts(newAlerts);
   }, [manualAttackHistory, autoAttackLogs]);
 
-
   const addAutoAttackLogEntry = useCallback((logEntry: Omit<AutoAttackLogEntry, 'timestamp'>) => {
     const newEntry = { ...logEntry, timestamp: new Date().toLocaleString('id-ID') };
-    setAutoAttackLogs(prev => [newEntry, ...prev.slice(0, 4)]); // Keep last 5 logs
+    setAutoAttackLogs(prev => [newEntry, ...prev.slice(0, 4)]);
   }, []);
 
   const validateUrl = (url: string): boolean => {
@@ -166,12 +186,11 @@ export default function AdminDashboardPage() {
   const runSingleAutoAttack = useCallback(async () => {
     if (!validateUrl(autoAttackTargetUrl)) {
       toast({ variant: "destructive", title: "URL Target Tidak Valid", description: "Harap masukkan URL yang valid untuk serangan otomatis." });
-      setIsAutoAttackEnabled(false); // Disable if URL becomes invalid
+      setIsAutoAttackEnabled(false);
       return;
     }
-
     if (!autoAttackProxyApiUrl.trim()) {
-        toast({ variant: "destructive", title: "URL API Proksi Diperlukan", description: "Serangan otomatis memerlukan URL API proksi untuk berfungsi dengan andal. Harap isi kolom URL API Proksi Otomatis." });
+        toast({ variant: "destructive", title: "URL API Proksi Diperlukan", description: "Serangan otomatis memerlukan URL API proksi." });
         setIsAutoAttackEnabled(false);
         return;
     }
@@ -180,42 +199,14 @@ export default function AdminDashboardPage() {
     setAutoAttackStatus(`Menyerang ${autoAttackTargetUrl} (${autoAttackMethod})...`);
     
     try {
-      const result = await startFloodAttack(
-        autoAttackTargetUrl,
-        autoAttackMethod,
-        undefined, // headers
-        undefined, // body
-        50,        // concurrency (default)
-        100,       // rate (higher default for auto)
-        15,        // duration (15s burst)
-        undefined, // proxiesString - Auto attack uses API only
-        autoAttackProxyApiUrl.trim() ? autoAttackProxyApiUrl : undefined  // proxyApiUrl
-      );
-
-      if (result.proxiesUsed !== undefined) {
-        setActiveProxyCount(result.proxiesUsed);
-      }
-
+      const result = await startFloodAttack(autoAttackTargetUrl, autoAttackMethod, undefined, undefined, 50, 100, 15, undefined, autoAttackProxyApiUrl.trim() ? autoAttackProxyApiUrl : undefined);
+      if (result.proxiesUsed !== undefined) setActiveProxyCount(result.proxiesUsed);
       const statusText = result.error ? `Error: ${result.error}` : `Selesai. Terkirim: ${result.totalSent}, Sukses: ${result.successful}, Gagal: ${result.failed}`;
-      addAutoAttackLogEntry({
-        target: autoAttackTargetUrl,
-        method: autoAttackMethod,
-        totalSent: result.totalSent,
-        successful: result.successful,
-        failed: result.failed,
-        error: result.error,
-        statusText: statusText
-      });
+      addAutoAttackLogEntry({ target: autoAttackTargetUrl, method: autoAttackMethod, totalSent: result.totalSent, successful: result.successful, failed: result.failed, error: result.error, statusText: statusText });
       setAutoAttackStatus(result.error ? `Selesai dengan error. Menunggu.` : `Selesai. Menunggu.`);
-      
     } catch (e: any) {
       const errorMsg = e.message || "Kesalahan tidak diketahui saat serangan otomatis.";
-      addAutoAttackLogEntry({
-        target: autoAttackTargetUrl,
-        method: autoAttackMethod,
-        error: errorMsg,
-        statusText: `Error Kritis: ${errorMsg}`
-      });
+      addAutoAttackLogEntry({ target: autoAttackTargetUrl, method: autoAttackMethod, error: errorMsg, statusText: `Error Kritis: ${errorMsg}` });
       setAutoAttackStatus(`Error kritis. Menunggu.`);
       toast({ variant: "destructive", title: "Kesalahan Serangan Otomatis", description: errorMsg });
     } finally {
@@ -223,38 +214,30 @@ export default function AdminDashboardPage() {
     }
   }, [autoAttackTargetUrl, autoAttackMethod, autoAttackProxyApiUrl, addAutoAttackLogEntry, toast]);
 
-
   useEffect(() => {
     let attackIntervalId: NodeJS.Timeout | undefined;
     let countdownIntervalId: NodeJS.Timeout | undefined;
-    const attackCycleDuration = 25000; // 15s attack + 10s wait 
+    const attackCycleDuration = 25000;
 
     if (isAutoAttackEnabled && validateUrl(autoAttackTargetUrl) && !isAttacking) {
-      runSingleAutoAttack(); // Run immediately
-      
+      runSingleAutoAttack();
       attackIntervalId = setInterval(() => {
-         if (!isAttacking && isAutoAttackEnabled && validateUrl(autoAttackTargetUrl)) { // Check again before running
+         if (!isAttacking && isAutoAttackEnabled && validateUrl(autoAttackTargetUrl)) {
             runSingleAutoAttack();
          }
       }, attackCycleDuration);
-
-      // Countdown logic
       let remaining = attackCycleDuration / 1000;
-      setCountdown(remaining - 15); // Initial wait time
+      setCountdown(remaining - 15);
       countdownIntervalId = setInterval(() => {
         setCountdown(prev => {
-            if (prev <= 1) {
-                return (attackCycleDuration / 1000) - 15; 
-            }
+            if (prev <= 1) return (attackCycleDuration / 1000) - 15;
             return prev - 1;
         });
       }, 1000);
-
     } else if (!isAutoAttackEnabled) {
       setAutoAttackStatus("Nonaktif.");
       setCountdown(0);
     }
-
     return () => {
       clearInterval(attackIntervalId);
       clearInterval(countdownIntervalId);
@@ -262,13 +245,8 @@ export default function AdminDashboardPage() {
   }, [isAutoAttackEnabled, autoAttackTargetUrl, runSingleAutoAttack, isAttacking]);
 
   const handleToggleAutoAttack = (checked: boolean) => {
-    if (checked && !validateUrl(autoAttackTargetUrl)) {
-      toast({ variant: "destructive", title: "URL Target Diperlukan", description: "Harap masukkan URL target yang valid sebelum mengaktifkan serangan otomatis." });
-      setIsAutoAttackEnabled(false);
-      return;
-    }
-     if (checked && !autoAttackProxyApiUrl.trim()) {
-      toast({ variant: "destructive", title: "URL API Proksi Diperlukan", description: "Serangan otomatis memerlukan URL API proksi. Harap isi sebelum mengaktifkan." });
+    if (checked && (!validateUrl(autoAttackTargetUrl) || !autoAttackProxyApiUrl.trim())) {
+      toast({ variant: "destructive", title: "Konfigurasi Tidak Lengkap", description: "Harap isi URL target dan URL API proksi yang valid sebelum mengaktifkan." });
       setIsAutoAttackEnabled(false);
       return;
     }
@@ -280,263 +258,154 @@ export default function AdminDashboardPage() {
       setAutoAttackStatus("Menginisialisasi...");
     }
   };
-
+  
+  const totalManualAttacks = useMemo(() => manualAttackHistory.length, [manualAttackHistory]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-headline text-primary flex items-center">
           <LayoutDashboard className="mr-3 h-8 w-8" />
-          Dasbor Administrator
+          Dasbor Pengguna
         </h1>
       </div>
       <p className="text-muted-foreground">
-        Selamat datang di panel administrasi Flooder L7.
+        Selamat datang di panel kontrol Flooder L7. Pantau dan kelola semua aktivitas serangan dari sini.
       </p>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Serangan Manual (Lokal)</CardTitle>
-            <BarChart2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalManualAttacks.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Dari riwayat penyimpanan peramban.
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Proksi Aktif (Otomatis)</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {activeProxyCount === null ? (
-              <div className="text-2xl font-bold animate-pulse">-</div>
-            ) : (
-              <div className="text-2xl font-bold">{activeProxyCount.toLocaleString()}</div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Digunakan pada serangan otomatis terakhir.
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Peringatan Keamanan</CardTitle>
-            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${securityAlerts.length > 0 ? 'text-destructive' : ''}`}>
-              {securityAlerts.length}
-            </div>
-            {securityAlerts.length > 0 ? (
-              <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1 mt-1">
-                {securityAlerts.map((alert, index) => (
-                  <li key={index}>{alert}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Tidak ada peringatan terdeteksi dari riwayat.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Alamat IP Anda</CardTitle>
-            <Wifi className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isFetchingIp ? (
-              <div className="text-2xl font-bold animate-pulse">Memuat...</div>
-            ) : userIp ? (
-              <div className="text-2xl font-bold">{userIp}</div>
-            ) : (
-              <div className="text-lg font-bold text-destructive">{ipError}</div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Terdeteksi dari header permintaan server.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Auto Attack Card */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <RotateCw className="mr-2 h-5 w-5 text-primary" />
-            Pengaturan Serangan Otomatis
-          </CardTitle>
-          <CardDescription>
-            Konfigurasi dan aktifkan serangan otomatis periodik ke target. Serangan ini sangat bergantung pada proksi dari API untuk efektivitas dan menghindari pemblokiran.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="auto-attack-target" className="flex items-center"><TargetIcon className="mr-2 h-4 w-4" />URL Target Otomatis</Label>
-            <Input 
-              id="auto-attack-target" 
-              placeholder="https://target-otomatis.com" 
-              value={autoAttackTargetUrl}
-              onChange={(e) => setAutoAttackTargetUrl(e.target.value)}
-              disabled={isAutoAttackEnabled && isAttacking}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="auto-attack-proxy-api" className="flex items-center"><Globe className="mr-2 h-4 w-4" />URL API Proksi Otomatis (Wajib)</Label>
-            <Input 
-              id="auto-attack-proxy-api" 
-              placeholder="https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
-              value={autoAttackProxyApiUrl}
-              onChange={(e) => setAutoAttackProxyApiUrl(e.target.value)}
-              disabled={isAutoAttackEnabled && isAttacking}
-            />
-             <CardDescription>
-                Serangan otomatis sangat disarankan menggunakan proksi untuk menghindari pemblokiran IP. Masukkan URL yang mengembalikan daftar proksi.
-            </CardDescription>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="auto-attack-method" className="flex items-center"><ServerIcon className="mr-2 h-4 w-4" />Metode HTTP Otomatis</Label>
-            <Select 
-              value={autoAttackMethod} 
-              onValueChange={(value) => setAutoAttackMethod(value as typeof HTTP_METHODS_BASE[number])}
-              disabled={isAutoAttackEnabled && isAttacking}
-            >
-              <SelectTrigger id="auto-attack-method">
-                <SelectValue placeholder="Pilih metode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Metode HTTP Dasar</SelectLabel>
-                  {HTTP_METHODS_BASE.map(method => (
-                    <SelectItem key={method} value={method}>{method}</SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center space-x-3">
-            <Switch 
-              id="enable-auto-attack" 
-              checked={isAutoAttackEnabled}
-              onCheckedChange={handleToggleAutoAttack}
-              disabled={isAttacking && isAutoAttackEnabled} 
-            />
-            <Label htmlFor="enable-auto-attack" className="flex items-center">
-              <Power className={`mr-2 h-4 w-4 ${isAutoAttackEnabled ? 'text-green-500' : 'text-red-500'}`} />
-              {isAutoAttackEnabled ? 'Serangan Otomatis Aktif' : 'Serangan Otomatis Nonaktif'}
-            </Label>
-          </div>
-          <div>
-            <h4 className="font-medium flex items-center"><Zap className="mr-2 h-4 w-4 text-primary"/>Status Saat Ini:</h4>
-            <p className={`text-sm ${isAttacking ? 'text-yellow-500 animate-pulse' : (isAutoAttackEnabled ? 'text-green-500' : 'text-muted-foreground')}`}>
-              {autoAttackStatus}
-              {isAutoAttackEnabled && !isAttacking && countdown > 0 && ` Serangan berikutnya dalam ~${countdown}d.`}
-            </p>
-          </div>
-          {autoAttackLogs.length > 0 && (
-            <div>
-              <h4 className="font-medium flex items-center mb-2"><FileClock className="mr-2 h-4 w-4" />Log Serangan Otomatis (5 Terbaru):</h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-muted/50 rounded-md">
-                {autoAttackLogs.map((log, index) => (
-                  <div key={index} className="text-xs border-b border-border pb-1 mb-1">
-                    <p><span className="font-semibold">[{log.timestamp}]</span> Target: {log.target} ({log.method})</p>
-                    <p className={log.error ? 'text-red-500' : 'text-green-500'}>{log.statusText}</p>
-                  </div>
-                ))}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center"><RotateCw className="mr-2 h-5 w-5 text-primary" />Pengaturan Serangan Otomatis</CardTitle>
+              <CardDescription>Konfigurasi serangan periodik. Fitur ini sangat bergantung pada proksi dari API untuk efektivitas.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="auto-attack-target" className="flex items-center"><TargetIcon className="mr-2 h-4 w-4" />URL Target Otomatis</Label>
+                <Input id="auto-attack-target" placeholder="https://target-otomatis.com" value={autoAttackTargetUrl} onChange={(e) => setAutoAttackTargetUrl(e.target.value)} disabled={isAutoAttackEnabled && isAttacking} />
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Manual Attack History Card - Now dynamic from localStorage */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <History className="mr-2 h-5 w-5" />
-            Riwayat Serangan Manual Terbaru
-          </CardTitle>
-          <CardDescription>
-            Menampilkan ringkasan serangan manual yang telah dilakukan dari halaman utama (disimpan di peramban Anda).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {manualAttackHistory.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal &amp; Waktu</TableHead>
-                  <TableHead>Target URL</TableHead>
-                  <TableHead>Metode</TableHead>
-                  <TableHead className="text-center">Durasi</TableHead>
-                  <TableHead className="text-right">Terkirim</TableHead>
-                  <TableHead className="text-right">Sukses</TableHead>
-                  <TableHead className="text-right">Gagal</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {manualAttackHistory.slice(0, 5).map((attack) => (
-                  <TableRow key={attack.id}>
-                    <TableCell className="font-medium">{attack.dateTime}</TableCell>
-                    <TableCell className="truncate max-w-xs">{attack.targetUrl}</TableCell>
-                    <TableCell>{attack.method}</TableCell>
-                    <TableCell className="text-center">{attack.duration}d</TableCell>
-                    <TableCell className="text-right">{attack.requestsSent.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-green-500">{attack.successful.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-red-500">{attack.failed.toLocaleString()}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center space-x-1">
-                        {getStatusIcon(attack.status, attack.error)}
-                        <span>{attack.status}</span>
+              <div className="space-y-2">
+                <Label htmlFor="auto-attack-proxy-api" className="flex items-center"><Globe className="mr-2 h-4 w-4" />URL API Proksi Otomatis (Wajib)</Label>
+                <Input id="auto-attack-proxy-api" placeholder="https://api.proxyscrape.com/v2/?request=getproxies&protocol=http" value={autoAttackProxyApiUrl} onChange={(e) => setAutoAttackProxyApiUrl(e.target.value)} disabled={isAutoAttackEnabled && isAttacking} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="auto-attack-method" className="flex items-center"><ServerIcon className="mr-2 h-4 w-4" />Metode HTTP Otomatis</Label>
+                <Select value={autoAttackMethod} onValueChange={(value) => setAutoAttackMethod(value as typeof HTTP_METHODS_BASE[number])} disabled={isAutoAttackEnabled && isAttacking}>
+                  <SelectTrigger id="auto-attack-method"><SelectValue placeholder="Pilih metode" /></SelectTrigger>
+                  <SelectContent><SelectGroup><SelectLabel>Metode</SelectLabel>{HTTP_METHODS_BASE.map(method => (<SelectItem key={method} value={method}>{method}</SelectItem>))}</SelectGroup></SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Switch id="enable-auto-attack" checked={isAutoAttackEnabled} onCheckedChange={handleToggleAutoAttack} disabled={isAttacking && isAutoAttackEnabled} />
+                <Label htmlFor="enable-auto-attack" className="flex items-center">
+                  <Power className={`mr-2 h-4 w-4 ${isAutoAttackEnabled ? 'text-green-500' : 'text-red-500'}`} />
+                  {isAutoAttackEnabled ? 'Serangan Otomatis Aktif' : 'Serangan Otomatis Nonaktif'}
+                </Label>
+              </div>
+              <div>
+                <h4 className="font-medium flex items-center"><Zap className="mr-2 h-4 w-4 text-primary"/>Status Saat Ini:</h4>
+                <p className={`text-sm ${isAttacking ? 'text-yellow-500 animate-pulse' : (isAutoAttackEnabled ? 'text-green-500' : 'text-muted-foreground')}`}>
+                  {autoAttackStatus}
+                  {isAutoAttackEnabled && !isAttacking && countdown > 0 && ` Serangan berikutnya dalam ~${countdown}d.`}
+                </p>
+              </div>
+              {autoAttackLogs.length > 0 && (
+                <div>
+                  <h4 className="font-medium flex items-center mb-2"><FileClock className="mr-2 h-4 w-4" />Log Serangan Otomatis (5 Terbaru):</h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-muted/50 rounded-md">
+                    {autoAttackLogs.map((log, index) => (
+                      <div key={index} className="text-xs border-b border-border pb-1 mb-1">
+                        <p><span className="font-semibold">[{log.timestamp}]</span> Target: {log.target} ({log.method})</p>
+                        <p className={log.error ? 'text-red-500' : 'text-green-500'}>{log.statusText}</p>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="text-muted-foreground text-center py-4">Belum ada riwayat serangan manual yang tercatat.</p>
-          )}
-        </CardContent>
-      </Card>
-        
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Settings className="mr-2 h-5 w-5" />
-            Pengaturan Sistem (Contoh)
-          </CardTitle>
-          <CardDescription>
-            Beberapa pengaturan global aplikasi akan ditampilkan di sini.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <h4 className="font-medium">Mode Pemeliharaan</h4>
-            <p className="text-sm text-muted-foreground">Status: <span className="text-green-500 font-semibold">Nonaktif</span></p>
-          </div>
-          <div>
-            <h4 className="font-medium">URL API Proksi Default</h4>
-            <p className="text-sm text-muted-foreground">Tidak ada (perlu input manual jika digunakan)</p>
-          </div>
-            <div>
-            <h4 className="font-medium">Batas Maksimum Konkurensi</h4>
-            <p className="text-sm text-muted-foreground">20000 permintaan/detik</p>
-          </div>
-        </CardContent>
-      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5" />Riwayat Serangan Manual Terbaru</CardTitle>
+              <CardDescription>Menampilkan 5 serangan manual terakhir dari halaman utama (disimpan di peramban).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {manualAttackHistory.length > 0 ? (
+                <Table>
+                  <TableHeader><TableRow><TableHead>Waktu</TableHead><TableHead>Target</TableHead><TableHead>Metode</TableHead><TableHead className="text-right">Terkirim</TableHead><TableHead className="text-right">Sukses</TableHead><TableHead className="text-right">Gagal</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {manualAttackHistory.slice(0, 5).map((attack) => (
+                      <TableRow key={attack.id}>
+                        <TableCell className="font-medium">{new Date(attack.id).toLocaleTimeString('id-ID')}</TableCell>
+                        <TableCell className="truncate max-w-[200px]">{attack.targetUrl}</TableCell>
+                        <TableCell>{attack.method}</TableCell>
+                        <TableCell className="text-right">{attack.requestsSent.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-green-500">{attack.successful.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-red-500">{attack.failed.toLocaleString()}</TableCell>
+                        <TableCell className="text-center"><div className="flex items-center justify-center space-x-1">{getStatusIcon(attack.status, attack.error)}<span>{attack.status}</span></div></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">Belum ada riwayat serangan manual.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center text-base"><Briefcase className="mr-2 h-5 w-5"/> Ringkasan Status</CardTitle></CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div className="flex justify-between items-center"><span className="text-muted-foreground flex items-center"><BarChartHorizontal className="mr-2 h-4 w-4"/>Total Serangan Manual</span><span className="font-bold text-lg">{totalManualAttacks.toLocaleString()}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4"/>Proksi Otomatis Terakhir</span>{activeProxyCount === null ? <span className="font-bold text-lg animate-pulse">-</span> : <span className="font-bold text-lg">{activeProxyCount.toLocaleString()}</span>}</div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground flex items-center"><Wifi className="mr-2 h-4 w-4"/>Alamat IP Anda</span>{isFetchingIp ? <span className="font-semibold animate-pulse">Memuat...</span> : userIp ? <span className="font-semibold">{userIp}</span> : <span className="font-semibold text-destructive">N/A</span>}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="flex items-center text-base"><Zap className="mr-2 h-5 w-5"/>Statistik Serangan Manual</CardTitle><CardDescription>Visualisasi 5 serangan manual terakhir.</CardDescription></CardHeader>
+            <CardContent>
+              {chartData.length > 0 ? (
+                <ChartContainer config={chartConfig} className="h-[200px] w-full">
+                  <BarChart accessibilityLayer data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => value.slice(0, 5)}/>
+                    <YAxis tickLine={false} axisLine={false} tickMargin={8} width={30}/>
+                    <Tooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                    <Bar dataKey="successful" fill="var(--color-successful)" radius={4} name="Sukses" />
+                    <Bar dataKey="failed" fill="var(--color-failed)" radius={4} name="Gagal" />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                 <div className="flex flex-col items-center justify-center h-[200px] text-center"><Info className="h-8 w-8 text-muted-foreground mb-2"/><p className="text-muted-foreground">Belum ada data serangan.</p><p className="text-xs text-muted-foreground">Lakukan serangan untuk melihat statistik.</p></div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="flex items-center text-base"><ShieldAlert className="mr-2 h-5 w-5" />Peringatan Keamanan</CardTitle></CardHeader>
+            <CardContent>
+              {securityAlerts.length > 0 ? (
+                <ul className="text-sm text-muted-foreground list-disc pl-4 space-y-2">
+                  {securityAlerts.map((alert, index) => (<li key={index}><span className="text-foreground">{alert}</span></li>))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">Tidak ada peringatan terdeteksi dari riwayat.</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="flex items-center text-base"><Settings className="mr-2 h-5 w-5" />Pengaturan Sistem</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Mode Pemeliharaan</span><span className="font-semibold text-green-500">Nonaktif</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Maks. Konkurensi</span><span className="font-semibold">20.000</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Maks. Durasi</span><span className="font-semibold">60d</span></div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
-    
-
-    
 
     

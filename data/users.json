@@ -3,5 +3,10 @@
     "id": "2fff8ce3-1b8f-467b-9d2e-09047e6badae",
     "email": "Alqorniu522@gmail.com",
     "passwordHash": "$2b$10$Eocrwxq7jobrZLjROGkJr.6oY1PQMASOTGCoM.n5VVZqKoaqxwP5u"
+  },
+  {
+    "id": "d1c12517-3db8-49a9-b090-e55f84cd46d3",
+    "email": "admin@admin.com",
+    "passwordHash": "$2b$10$zDFtkHaGJXhgKIhljCCueuqRix8siV6En94uS1ri5lNhsb6AWIxvu"
   }
 ]
