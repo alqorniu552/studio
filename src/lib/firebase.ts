@@ -1,5 +1,5 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,7 +10,19 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
 
-export { app, auth };
+// Check if all necessary client-side Firebase config values are present.
+// If not, the app can still run, but auth features will be disabled.
+const isFirebaseClientConfigured = firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId;
+
+if (isFirebaseClientConfigured) {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  auth = getAuth(app!);
+} else {
+    // The app will not crash, and the UI will show a warning.
+    console.warn("Client-side Firebase config is missing. Auth features will be disabled.");
+}
+
+export { app, auth, isFirebaseClientConfigured };
