@@ -3,6 +3,7 @@
 
 import { HttpsProxyAgent } from "https-proxy-agent";
 import https from 'node:https'; // Import the https module
+import { headers } from 'next/headers';
 import { USER_AGENTS } from "@/lib/user-agents";
 
 export interface FloodStats {
@@ -400,5 +401,28 @@ export async function checkProxies(proxiesString: string): Promise<{
     totalChecked: proxyEntries.length,
   };
 }
+
+export async function getUserIpAddress(): Promise<{ ip: string | null; error?: string }> {
+  try {
+    const fwd = headers().get('x-forwarded-for');
+    if (fwd) {
+      // The x-forwarded-for header can be a comma-separated list of IPs.
+      // The client's IP is typically the first one.
+      const clientIp = fwd.split(',')[0].trim();
+      return { ip: clientIp };
+    }
+    // Fallback if the primary header isn't found
+    const realIp = headers().get('x-real-ip');
+    if (realIp) {
+      return { ip: realIp.split(',')[0].trim() };
+    }
+    
+    return { ip: null, error: "Header IP yang relevan tidak ditemukan." };
+  } catch (e: any) {
+    console.error("Kesalahan mengambil alamat IP:", e);
+    return { ip: null, error: "Gagal mengambil alamat IP dari server." };
+  }
+}
+    
 
     

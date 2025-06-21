@@ -8,9 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BarChart2, Users, Settings, ShieldAlert, LayoutDashboard, History, CheckCircle, XCircle, AlertTriangle, Power, FileClock, Zap, Target as TargetIcon, Server as ServerIcon, RotateCw } from 'lucide-react';
+import { BarChart2, Users, Settings, ShieldAlert, LayoutDashboard, History, CheckCircle, XCircle, AlertTriangle, Power, FileClock, Zap, Target as TargetIcon, Server as ServerIcon, RotateCw, Wifi } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
-import { startFloodAttack, type FloodStats } from "@/app/actions";
+import { startFloodAttack, type FloodStats, getUserIpAddress } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 
 // Define the interface for attack history entries, can be moved to a shared types file later
@@ -60,6 +60,9 @@ export default function AdminDashboardPage() {
   const [countdown, setCountdown] = useState(0);
   const [manualAttackHistory, setManualAttackHistory] = useState<AttackHistoryEntry[]>([]);
   const [totalManualAttacks, setTotalManualAttacks] = useState(0);
+  const [userIp, setUserIp] = useState<string | null>(null);
+  const [ipError, setIpError] = useState<string | null>(null);
+  const [isFetchingIp, setIsFetchingIp] = useState(true);
 
   useEffect(() => {
     // Load manual attack history from localStorage
@@ -75,6 +78,20 @@ export default function AdminDashboardPage() {
         console.error("Failed to parse attack history from localStorage:", e);
       }
     }
+
+    // Fetch user IP
+    const fetchIp = async () => {
+      setIsFetchingIp(true);
+      const result = await getUserIpAddress();
+      if (result.ip) {
+        setUserIp(result.ip);
+      } else {
+        setIpError(result.error || "Alamat IP tidak dapat ditentukan.");
+      }
+      setIsFetchingIp(false);
+    };
+    fetchIp();
+
   }, []);
 
 
@@ -209,7 +226,7 @@ export default function AdminDashboardPage() {
         Selamat datang di panel administrasi Meriam Permintaan.
       </p>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Serangan Manual (Lokal)</CardTitle>
@@ -243,6 +260,24 @@ export default function AdminDashboardPage() {
             <div className="text-2xl font-bold">3</div>
             <p className="text-xs text-muted-foreground">
               Perlu tinjauan segera
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Alamat IP Anda</CardTitle>
+            <Wifi className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isFetchingIp ? (
+              <div className="text-2xl font-bold animate-pulse">Memuat...</div>
+            ) : userIp ? (
+              <div className="text-2xl font-bold">{userIp}</div>
+            ) : (
+              <div className="text-lg font-bold text-destructive">{ipError}</div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Terdeteksi dari header permintaan server.
             </p>
           </CardContent>
         </Card>
@@ -405,6 +440,8 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+    
+
     
 
     
