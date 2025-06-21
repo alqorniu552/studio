@@ -16,9 +16,9 @@ export function LogoutButton() {
     setIsLoading(true);
     await signOut();
     toast({ title: 'Logout Berhasil' });
-    // Instead of pushing, we use window.location to force a full page reload
-    // This helps in clearing any server-side rendered state and ensures middleware runs correctly.
-    window.location.href = '/login';
+    router.push('/login');
+    // We call refresh to ensure server components depending on the session are re-rendered.
+    router.refresh(); 
   };
 
   return (

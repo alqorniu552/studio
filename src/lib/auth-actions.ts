@@ -58,18 +58,18 @@ async function writeUsers(users: User[]): Promise<void> {
     await fs.writeFile(dbPath, JSON.stringify(users, null, 2), 'utf-8');
   } catch (error) {
     console.error("Gagal menulis ke database pengguna:", error);
-    throw new Error("Tidak dapat menyimpan data pengguna.");
+    throw new Error("Gagal menyimpan data pengguna.");
   }
 }
 
 // --- Session Management ---
 const secretKey = process.env.JWT_SECRET;
-if (!secretKey) {
-  throw new Error('JWT_SECRET tidak diatur di file .env.local. Sesi tidak aman.');
-}
 const key = new TextEncoder().encode(secretKey);
 
 async function encrypt(payload: any) {
+  if (!secretKey) {
+    throw new Error('JWT_SECRET tidak diatur di file .env.local. Sesi tidak aman.');
+  }
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -110,7 +110,8 @@ export async function login(credentials: LoginCredentials): Promise<ActionResult
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    console.error("Kesalahan Login:", error);
+    return { success: false, error: "Terjadi kesalahan internal. Silakan coba lagi." };
   }
 }
 
@@ -124,7 +125,7 @@ export async function register(credentials: RegisterCredentials): Promise<Action
 
   try {
     const users = await readUsers();
-    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+    if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
       return { success: false, error: 'Email sudah terdaftar.' };
     }
 
@@ -137,12 +138,11 @@ export async function register(credentials: RegisterCredentials): Promise<Action
 
     users.push(newUser);
     await writeUsers(users);
-
-    // Session is no longer created on registration.
     
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    console.error("Kesalahan Registrasi:", error);
+    return { success: false, error: "Terjadi kesalahan internal. Silakan coba lagi." };
   }
 }
 
