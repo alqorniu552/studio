@@ -24,13 +24,14 @@ Pastikan server Anda telah menginstal perangkat lunak berikut:
 -   **Node.js** (versi 18.x atau lebih baru direkomendasikan)
 -   **npm** (biasanya terinstal bersama Node.js)
 -   `git` (untuk mengkloning repositori)
--   **Konfigurasi Lingkungan:** Anda harus membuat file `.env.local` di root proyek. File ini akan berisi kunci rahasia untuk mengamankan sesi pengguna.
+-   **Konfigurasi Lingkungan:** File `.env.local` akan dibuat secara otomatis dengan kunci rahasia placeholder agar aplikasi dapat segera dijalankan.
 
+    **PENTING UNTUK PRODUKSI:** Kunci yang dibuat otomatis ini **tidak aman**. Anda **harus** menggantinya dengan kunci baru yang kuat di server produksi Anda. Anda dapat membuat kunci baru dengan menjalankan perintah berikut di terminal server Anda:
+    ```bash
+    openssl rand -base64 32
     ```
-    # Secret key untuk menandatangani sesi JWT (JSON Web Token)
-    # Anda bisa membuat kunci acak yang kuat menggunakan perintah `openssl rand -base64 32` di terminal
-    JWT_SECRET=kunci_rahasia_anda_yang_sangat_aman_disini
-    ```
+    Salin hasilnya dan tempelkan sebagai nilai `JWT_SECRET` di file `.env.local` Anda.
+    
     Data pengguna disimpan dalam file `data/users.json` di dalam direktori proyek.
 
 ### Langkah-langkah Deployment
