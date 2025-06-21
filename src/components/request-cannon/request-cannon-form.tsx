@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { startFloodAttack, fetchProxiesFromUrl, checkProxies, type FloodStats } from "@/app/actions";
 import { ProgressDisplay } from "./progress-display";
 import { Target, Users, Zap, PlayCircle, StopCircle, ArrowRightLeft, ListPlus, FileText, Timer, ShieldQuestion, Globe, DownloadCloud, Loader2, ListChecks, Server } from "lucide-react";
@@ -113,8 +113,43 @@ export function RequestCannonForm() {
     },
   });
 
+  const { setValue } = form;
   const selectedMethod = form.watch("method");
   const currentProxies = form.watch("proxies");
+
+  useEffect(() => {
+    const baseMethod = getBaseMethod(selectedMethod);
+    let defaultHeaders = '';
+
+    const commonHeaders = [
+        'Accept-Language: id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Connection: keep-alive',
+        'Sec-Fetch-Dest: document',
+        'Sec-Fetch-Mode: navigate',
+        'Sec-Fetch-Site: none',
+        'Sec-Fetch-User: ?1',
+        'Upgrade-Insecure-Requests: 1'
+    ].join('\n');
+
+    if (METHODS_WITH_BODY_BASE.includes(baseMethod)) {
+        // Headers for methods with a body (POST, PUT, PATCH)
+        defaultHeaders = [
+            'Content-Type: application/json',
+            'Accept: application/json, text/plain, */*',
+            commonHeaders
+        ].join('\n');
+    } else {
+        // Headers for methods without a body (GET, DELETE, etc.)
+        defaultHeaders = [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            commonHeaders
+        ].join('\n');
+    }
+    
+    // Set the value in the form
+    setValue("headers", defaultHeaders, { shouldValidate: true, shouldDirty: true });
+
+  }, [selectedMethod, setValue]);
 
   const onSubmit = (values: FormValues) => {
     if (isFlooding && isPending) { 
@@ -285,11 +320,11 @@ export function RequestCannonForm() {
           name="method"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Server className="mr-2 h-4 w-4" />Metode HTTP & Versi</FormLabel>
+              <FormLabel className="flex items-center"><Server className="mr-2 h-4 w-4" />Metode HTTP &amp; Versi</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isAnyOperationActive}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih metode & versi HTTP" />
+                    <SelectValue placeholder="Pilih metode &amp; versi HTTP" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -321,7 +356,7 @@ export function RequestCannonForm() {
           name="headers"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><ListPlus className="mr-2 h-4 w-4" />Header Kustom (Opsional)</FormLabel>
+              <FormLabel className="flex items-center"><ListPlus className="mr-2 h-4 w-4" />Header Kustom (Otomatis)</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Content-Type: application/json&#x0a;Authorization: Bearer token&#x0a;User-Agent: MyCustomAgent/1.0"
@@ -331,7 +366,7 @@ export function RequestCannonForm() {
                 />
               </FormControl>
               <FormDescription>
-                Masukkan satu header per baris (Kunci: Nilai). Untuk serangan logika bisnis, header penting mungkin termasuk `Authorization` untuk otentikasi atau `Cookie` untuk sesi. Untuk target yang dilindungi (misalnya Cloudflare), gunakan header browser yang realistis. Jika User-Agent tidak ditentukan, agen pengguna acak akan dipilih dari daftar internal.
+                Header dibuat secara otomatis berdasarkan Metode HTTP yang dipilih. Anda dapat mengeditnya jika perlu. Untuk serangan logika bisnis, header penting mungkin termasuk `Authorization` atau `Cookie`. Jika User-Agent tidak ditentukan, agen pengguna acak akan dipilih dari daftar internal.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -365,7 +400,7 @@ export function RequestCannonForm() {
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder="https://api.proxyscrape.com/?request=getproxies&proxytype=http&timeout=10000&country=all&ssl=all&anonymity=all"
+                placeholder="https://api.proxyscrape.com/?request=getproxies&amp;proxytype=http&amp;timeout=10000&amp;country=all&amp;ssl=all&amp;anonymity=all"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
@@ -517,3 +552,4 @@ export function RequestCannonForm() {
   );
 }
 
+    
