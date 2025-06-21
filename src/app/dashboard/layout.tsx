@@ -1,6 +1,5 @@
 
 import type {Metadata} from 'next';
-import { LogoutButton } from '@/components/auth/logout-button';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Home, Shield } from 'lucide-react';
@@ -32,7 +31,6 @@ export default function DashboardLayout({
                       Admin
                   </Button>
               </Link>
-              <LogoutButton />
           </div>
       </header>
       <main className="flex-1 p-4 sm:p-6 md:p-8">

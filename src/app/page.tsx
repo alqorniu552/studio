@@ -1,8 +1,7 @@
 
 import { RequestCannonForm } from '@/components/request-cannon/request-cannon-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Rocket, LayoutDashboard } from 'lucide-react';
-import { LogoutButton } from '@/components/auth/logout-button';
+import { Rocket, LayoutDashboard, Shield } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -21,7 +20,12 @@ export default function Home() {
                     Dasbor
                 </Button>
             </Link>
-            <LogoutButton />
+            <Link href="/admin">
+                <Button variant="outline">
+                    <Shield className="mr-2 h-4 w-4"/>
+                    Admin
+                </Button>
+            </Link>
         </div>
       </header>
       <main className="flex flex-1 flex-col items-center justify-center p-4 sm:p-6 md:p-8 bg-background">

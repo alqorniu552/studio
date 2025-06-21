@@ -4,13 +4,12 @@ Ini adalah aplikasi Next.js yang berfungsi sebagai alat untuk melakukan serangan
 
 ## Fitur Utama
 
--   **Otentikasi Pengguna:** Sistem pendaftaran dan login yang aman untuk melindungi akses ke aplikasi, berjalan sepenuhnya di server aplikasi.
--   **Konfigurasi Serangan Fleksibel:** Atur URL target, metode HTTP, header kustom, dan isi permintaan.
--   **Kontrol Beban:** Sesuaikan jumlah permintaan bersamaan (konkurensi) dan tingkat permintaan per detik (RPS).
--   **Dukungan Proksi Dinamis:** Gunakan proksi dari daftar statis atau perbarui secara dinamis dari URL API selama serangan berlangsung.
--   **Pemeriksa Proksi:** Verifikasi proksi yang aktif sebelum digunakan.
--   **Dasbor Admin:** Pantau riwayat serangan dan kelola serangan otomatis periodik.
--   **Laporan Real-time:** Dapatkan umpan balik visual tentang status serangan, termasuk rincian kode respons.
+-   **Konfigurasi Serangan Fleksibel**: Atur URL target, metode HTTP, header kustom, dan isi permintaan.
+-   **Kontrol Beban**: Sesuaikan jumlah permintaan bersamaan (konkurensi) dan tingkat permintaan per detik (RPS).
+-   **Dukungan Proksi Dinamis**: Gunakan proksi dari daftar statis atau perbarui secara dinamis dari URL API selama serangan berlangsung.
+-   **Pemeriksa Proksi**: Verifikasi proksi yang aktif sebelum digunakan.
+-   **Dasbor Pengguna & Admin**: Pantau riwayat serangan, kelola serangan otomatis periodik, dan lihat status sistem.
+-   **Laporan Real-time**: Dapatkan umpan balik visual tentang status serangan, termasuk rincian kode respons.
 
 ---
 
@@ -24,15 +23,6 @@ Pastikan server Anda telah menginstal perangkat lunak berikut:
 -   **Node.js** (versi 18.x atau lebih baru direkomendasikan)
 -   **npm** (biasanya terinstal bersama Node.js)
 -   `git` (untuk mengkloning repositori)
--   **Konfigurasi Lingkungan:** File `.env.local` akan dibuat secara otomatis dengan kunci rahasia placeholder agar aplikasi dapat segera dijalankan.
-
-    **PENTING UNTUK PRODUKSI:** Kunci yang dibuat otomatis ini **tidak aman**. Anda **harus** menggantinya dengan kunci baru yang kuat di server produksi Anda. Anda dapat membuat kunci baru dengan menjalankan perintah berikut di terminal server Anda:
-    ```bash
-    openssl rand -base64 32
-    ```
-    Salin hasilnya dan tempelkan sebagai nilai `JWT_SECRET` di file `.env.local` Anda.
-    
-    Data pengguna disimpan dalam file `data/users.json` di dalam direktori proyek.
 
 ### Langkah-langkah Deployment
 
