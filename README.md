@@ -1,3 +1,4 @@
+
 # Flooder L7
 
 Ini adalah aplikasi Next.js yang berfungsi sebagai alat untuk melakukan serangan banjir HTTP (Layer 7). Aplikasi ini dirancang untuk menguji ketahanan server dan infrastruktur jaringan terhadap beban permintaan yang tinggi.
@@ -10,6 +11,7 @@ Ini adalah aplikasi Next.js yang berfungsi sebagai alat untuk melakukan serangan
 -   **Pemeriksa Proksi**: Verifikasi proksi yang aktif sebelum digunakan.
 -   **Dasbor Pengguna & Admin**: Pantau riwayat serangan, kelola serangan otomatis periodik, dan lihat status sistem.
 -   **Laporan Real-time**: Dapatkan umpan balik visual tentang status serangan, termasuk rincian kode respons.
+-   **Otentikasi Admin**: Panel administrator dilindungi oleh sistem login khusus.
 
 ---
 
@@ -19,10 +21,32 @@ Aplikasi ini dibangun dengan Next.js dan dapat di-deploy di server Node.js mana 
 
 ### Prasyarat
 
-Pastikan server Anda telah menginstal perangkat lunak berikut:
 -   **Node.js** (versi 18.x atau lebih baru direkomendasikan)
 -   **npm** (biasanya terinstal bersama Node.js)
 -   `git` (untuk mengkloning repositori)
+
+### Konfigurasi Lingkungan
+
+Sebelum menjalankan aplikasi, Anda harus membuat file `.env.local` di direktori utama (root) proyek dan mengisinya dengan kredensial yang diperlukan.
+
+```bash
+# Salin contoh ke file .env.local
+cp .env.example .env.local
+```
+
+Kemudian, edit file `.env.local` dan ganti nilainya:
+
+```
+# Kredensial untuk login ke panel /admin.
+# Ganti dengan nilai yang kuat dan aman untuk produksi.
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD="your-strong-password"
+
+# Kunci rahasia untuk menandatangani sesi (JWT).
+# Untuk produksi, buat kunci yang sangat aman dengan menjalankan perintah berikut di terminal Anda:
+# openssl rand -base64 32
+JWT_SECRET="your-super-secret-jwt-key-generated-from-openssl"
+```
 
 ### Langkah-langkah Deployment
 

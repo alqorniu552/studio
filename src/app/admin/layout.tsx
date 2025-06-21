@@ -1,8 +1,9 @@
 
 import type {Metadata} from 'next';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { LogoutButton } from '@/components/auth/logout-button';
 import { Home, LayoutDashboard } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Panel Administrator - Flooder L7',
@@ -31,6 +32,7 @@ export default function AdminLayout({
                       Dasbor Pengguna
                   </Button>
               </Link>
+              <LogoutButton />
           </div>
       </header>
       <main className="flex-1 p-4 sm:p-6 md:p-8">

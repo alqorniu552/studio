@@ -1,14 +1,27 @@
 
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { decrypt } from '@/lib/session';
+import { cookies } from 'next/headers';
 
-// Otentikasi telah dihapus, jadi middleware ini tidak lagi diperlukan.
-// File ini disimpan agar tidak merusak build jika ada referensi, tetapi tidak melakukan apa-apa.
-export function middleware(request: NextRequest) {
+const protectedRoutes = ['/admin'];
+const publicRoutes = ['/admin/login'];
+
+export default async function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  const isProtectedRoute = protectedRoutes.some((prefix) => path.startsWith(prefix)) && !publicRoutes.includes(path);
+
+  if (isProtectedRoute) {
+    const cookie = cookies().get('admin_session')?.value;
+    const session = await decrypt(cookie);
+
+    if (!session?.username) {
+      return NextResponse.redirect(new URL('/admin/login', req.nextUrl));
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  // Matcher kosong berarti middleware ini tidak akan berjalan di path mana pun.
-  matcher: [],
+  matcher: ['/admin/:path*'],
 };
