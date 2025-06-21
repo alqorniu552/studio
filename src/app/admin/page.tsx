@@ -99,7 +99,7 @@ export default function AdminDashboardPage() {
 
   const fetchUsers = useCallback(async () => {
     const fetchedUsers = await getUsers();
-    setUsers(fetchedUsers);
+    setUsers(fetchedUsers || []);
   }, []);
 
   useEffect(() => {
