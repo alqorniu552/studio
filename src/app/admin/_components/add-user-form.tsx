@@ -1,12 +1,13 @@
+
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState, useEffect, useRef } from "react";
 import { createUser } from "@/lib/auth-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useRef } from "react";
 import { UserPlus } from "lucide-react";
 
 function SubmitButton() {
@@ -20,7 +21,7 @@ function SubmitButton() {
 }
 
 export function AddUserForm() {
-  const [state, formAction] = useFormState(createUser, undefined);
+  const [state, formAction] = useActionState(createUser, undefined);
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
 

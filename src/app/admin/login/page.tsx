@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState, useEffect } from "react";
 import { adminLogin } from "@/lib/auth-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -22,7 +22,7 @@ function SubmitButton() {
 }
 
 export default function AdminLoginPage() {
-  const [state, formAction] = useFormState(adminLogin, undefined);
+  const [state, formAction] = useActionState(adminLogin, undefined);
   const { toast } = useToast();
 
   useEffect(() => {
