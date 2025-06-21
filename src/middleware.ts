@@ -1,40 +1,27 @@
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  const session = request.cookies.get('session')?.value || '';
+  const session = request.cookies.get('session')?.value;
+  const { pathname } = request.nextUrl;
 
-  const protectedRoutes = ['/', '/admin'];
-  const authRoutes = ['/login', '/register'];
-  const currentPath = request.nextUrl.pathname;
+  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isProtectedRoute = pathname === '/' || pathname === '/admin';
 
-  // If no session, redirect to login for protected routes
-  if (!session && protectedRoutes.includes(currentPath)) {
+  // If the user is logged in and trying to access a login/register page,
+  // redirect them to the home page.
+  if (session && isAuthPage) {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // If the user is not logged in and trying to access a protected page,
+  // redirect them to the login page.
+  if (!session && isProtectedRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // If there's a session, try to verify it
-  if (session) {
-    try {
-      // Decode to check expiration without calling verifySessionCookie which makes a network request
-      // This is a lightweight check. For full validation, a backend call would be needed.
-      // For this implementation, we assume if the cookie exists, it's valid until it's checked on a server component/action.
-      const response = NextResponse.next();
-      
-      // If user is authenticated and tries to access login/register, redirect to home
-      if (authRoutes.includes(currentPath)) {
-        return NextResponse.redirect(new URL('/', request.url));
-      }
-      
-      return response;
-    } catch (error) {
-       // Invalid session, redirect to login and clear cookie
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('session');
-      return response;
-    }
-  }
-
+  // Otherwise, allow the request to proceed.
   return NextResponse.next();
 }
 

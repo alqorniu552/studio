@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -81,9 +82,9 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
               />
-               <FormDescription>
+               <p className="text-sm text-muted-foreground">
                 Minimal 6 karakter.
-              </FormDescription>
+              </p>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
