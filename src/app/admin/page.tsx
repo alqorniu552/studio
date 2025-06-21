@@ -64,6 +64,7 @@ export default function AdminDashboardPage() {
   const [userIp, setUserIp] = useState<string | null>(null);
   const [ipError, setIpError] = useState<string | null>(null);
   const [isFetchingIp, setIsFetchingIp] = useState(true);
+  const [securityAlerts, setSecurityAlerts] = useState<string[]>([]);
 
   useEffect(() => {
     // Load manual attack history from localStorage
@@ -94,6 +95,57 @@ export default function AdminDashboardPage() {
     fetchIp();
 
   }, []);
+
+  // Analyze history for security alerts
+  useEffect(() => {
+    const analyzeHistoryForAlerts = (history: AttackHistoryEntry[], logs: AutoAttackLogEntry[]): string[] => {
+      const alerts: Set<string> = new Set();
+      const alertThreshold = 0.5; // 50%
+
+      const getHostname = (url: string) => {
+        try {
+          return new URL(url).hostname;
+        } catch (e) {
+          return url; // Fallback to full URL if parsing fails
+        }
+      };
+
+      // Analyze manual history
+      history.forEach(attack => {
+        if (attack.requestsSent > 20 && !attack.error) {
+          const statusCodes = attack.statusCodeCounts || {};
+          let wafCount = (statusCodes[403] || 0) + (statusCodes[429] || 0);
+          let serverErrorCount = 0;
+          Object.entries(statusCodes).forEach(([code, count]) => {
+            if (parseInt(code) >= 500 && parseInt(code) < 600) {
+              serverErrorCount += count;
+            }
+          });
+
+          if ((wafCount / attack.requestsSent) > alertThreshold) {
+            alerts.add(`Potensi WAF/Rate Limit pada ${getHostname(attack.targetUrl)}`);
+          }
+          if ((serverErrorCount / attack.requestsSent) > alertThreshold) {
+            alerts.add(`Potensi ketidakstabilan server pada ${getHostname(attack.targetUrl)}`);
+          }
+        } else if (attack.error) {
+            alerts.add(`Serangan ke ${getHostname(attack.targetUrl)} gagal`);
+        }
+      });
+
+      // Analyze auto-attack logs
+      logs.forEach(log => {
+        if (log.error) {
+          alerts.add(`Serangan otomatis ke ${getHostname(log.target)} gagal`);
+        }
+      });
+
+      return Array.from(alerts).slice(0, 3); // Limit to 3 for display
+    };
+
+    const newAlerts = analyzeHistoryForAlerts(manualAttackHistory, autoAttackLogs);
+    setSecurityAlerts(newAlerts);
+  }, [manualAttackHistory, autoAttackLogs]);
 
 
   const addAutoAttackLogEntry = useCallback((logEntry: Omit<AutoAttackLogEntry, 'timestamp'>) => {
@@ -264,14 +316,24 @@ export default function AdminDashboardPage() {
         </Card>
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Peringatan Keamanan (Contoh)</CardTitle>
+            <CardTitle className="text-sm font-medium">Peringatan Keamanan</CardTitle>
             <ShieldAlert className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">
-              Data statis untuk demonstrasi.
-            </p>
+            <div className={`text-2xl font-bold ${securityAlerts.length > 0 ? 'text-destructive' : ''}`}>
+              {securityAlerts.length}
+            </div>
+            {securityAlerts.length > 0 ? (
+              <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1 mt-1">
+                {securityAlerts.map((alert, index) => (
+                  <li key={index}>{alert}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Tidak ada peringatan terdeteksi dari riwayat.
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="shadow-lg">
@@ -469,3 +531,4 @@ export default function AdminDashboardPage() {
     
 
     
+
