@@ -69,8 +69,8 @@ const formSchema = z.object({
         return proxyEntryRegex.test(trimmedLine);
     });
   }, { message: "Satu atau lebih entri proksi tidak valid. Gunakan format host:port, IP:PORT, atau user:pass@host:port. Jangan sertakan skema http:// atau https://." }),
-  concurrency: z.coerce.number().int().min(1, "Min 1").max(50000, "Maks 50.000").default(50),
-  rate: z.coerce.number().int().min(1, "Min 1").max(50000, "Maks 50.000").default(50),
+  concurrency: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20.000").default(50),
+  rate: z.coerce.number().int().min(1, "Min 1").max(20000, "Maks 20.000").default(50),
   duration: z.coerce.number().int().min(5, "Min 5d").max(60, "Maks 60d").default(10),
 });
 
@@ -230,7 +230,10 @@ export function RequestCannonForm() {
           toast({ title: "Banjir Selesai", description: `Mengirim ${result.totalSent} permintaan selama ${values.duration}d. Berhasil: ${result.successful}, Gagal: ${result.failed}.` });
         }
       } catch (error) { 
-        const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga.";
+        let errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga.";
+        if (errorMessage.includes("An unexpected response was received")) {
+            errorMessage = "Server mengalami kesalahan tak terduga, kemungkinan karena kehabisan sumber daya (memori/CPU) akibat pengaturan serangan yang terlalu tinggi. Coba kurangi 'Permintaan Bersamaan' atau 'Tingkat Permintaan'.";
+        }
         setCurrentError(errorMessage);
         setStats(prevStats => prevStats && prevStats.error ? prevStats : { totalSent: 0, successful: 0, failed: 0, error: errorMessage });
       } finally {
@@ -482,7 +485,7 @@ proxy.example.com:3128"
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={50000}
+                  max={20000}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
@@ -491,7 +494,7 @@ proxy.example.com:3128"
                 />
               </FormControl>
                <FormDescription>
-                Jumlah maksimum permintaan yang diizinkan untuk berjalan secara paralel.
+                Jumlah maksimum permintaan yang diizinkan untuk berjalan secara paralel. Pengaturan yang sangat tinggi dapat menyebabkan ketidakstabilan sistem.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -508,7 +511,7 @@ proxy.example.com:3128"
                 <Slider
                   defaultValue={[value]}
                   min={1}
-                  max={50000}
+                  max={20000}
                   step={1}
                   onValueChange={(vals) => onChange(vals[0])}
                   disabled={isAnyOperationActive}
