@@ -1,4 +1,4 @@
-# Meriam Permintaan (Request Cannon)
+# Flooder L7
 
 Ini adalah aplikasi Next.js yang berfungsi sebagai alat untuk melakukan serangan banjir HTTP (Layer 7). Aplikasi ini dirancang untuk menguji ketahanan server dan infrastruktur jaringan terhadap beban permintaan yang tinggi.
 
@@ -65,9 +65,9 @@ Untuk menjalankan aplikasi Next.js di lingkungan produksi, sangat disarankan unt
 2.  **Jalankan Aplikasi dengan PM2**
     Mulai aplikasi menggunakan PM2 dalam **mode cluster**. Ini akan secara otomatis membuat proses untuk setiap inti CPU yang tersedia di VPS Anda, memaksimalkan performa dan stabilitas.
     ```bash
-    pm2 start npm --name "meriam-permintaan" -- run start -- -i max
+    pm2 start npm --name "flooder-l7" -- run start -- -i max
     ```
-    -   `--name "meriam-permintaan"`: Memberi nama pada proses Anda agar mudah dikelola.
+    -   `--name "flooder-l7"`: Memberi nama pada proses Anda agar mudah dikelola.
     -   `-- run start`: Menjalankan skrip `start` dari `package.json`.
     -   `-i max`: (atau `--instances max`) Memberi tahu PM2 untuk menjalankan aplikasi dalam mode cluster menggunakan semua inti CPU yang tersedia.
 
@@ -79,4 +79,4 @@ Untuk menjalankan aplikasi Next.js di lingkungan produksi, sangat disarankan unt
     ```
     PM2 akan memberikan perintah yang perlu Anda salin dan jalankan untuk menyelesaikan pengaturan startup.
 
-Aplikasi Anda sekarang berjalan di latar belakang, biasanya di port `3000`. Anda dapat memeriksa statusnya dengan `pm2 list` atau melihat log dengan `pm2 logs meriam-permintaan`.
+Aplikasi Anda sekarang berjalan di latar belakang, biasanya di port `3000`. Anda dapat memeriksa statusnya dengan `pm2 list` atau melihat log dengan `pm2 logs flooder-l7`.

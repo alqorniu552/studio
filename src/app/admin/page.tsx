@@ -29,7 +29,7 @@ interface AttackHistoryEntry {
 }
 
 const HTTP_METHODS_BASE = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
-const ATTACK_HISTORY_STORAGE_KEY = "requestCannonAttackHistory";
+const ATTACK_HISTORY_STORAGE_KEY = "flooderL7AttackHistory";
 
 interface AutoAttackLogEntry {
   timestamp: string;
@@ -291,7 +291,7 @@ export default function AdminDashboardPage() {
         </h1>
       </div>
       <p className="text-muted-foreground">
-        Selamat datang di panel administrasi Meriam Permintaan.
+        Selamat datang di panel administrasi Flooder L7.
       </p>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -540,5 +540,3 @@ export default function AdminDashboardPage() {
     
 
     
-
-

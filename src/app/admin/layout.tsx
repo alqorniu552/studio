@@ -4,8 +4,8 @@ import '../globals.css'; // Menggunakan globals.css yang sama
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Dasbor Admin - Meriam Permintaan',
-  description: 'Halaman administrasi untuk Meriam Permintaan.',
+  title: 'Dasbor Admin - Flooder L7',
+  description: 'Halaman administrasi untuk Flooder L7.',
 };
 
 export default function AdminLayout({

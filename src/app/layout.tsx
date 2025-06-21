@@ -1,9 +1,10 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Meriam Permintaan',
+  title: 'Flooder L7',
   description: 'Alat Banjir HTTP',
 };
 

@@ -11,7 +11,7 @@ export default function Home() {
           <div className="flex items-center justify-center mb-4">
             <Rocket className="h-12 w-12 text-primary" />
           </div>
-          <CardTitle className="text-3xl font-headline text-primary">Meriam Permintaan</CardTitle>
+          <CardTitle className="text-3xl font-headline text-primary">Flooder L7</CardTitle>
           <CardDescription className="text-muted-foreground">
             Konfigurasi dan luncurkan serangan banjir Layer 7 (HTTP). Tujuannya adalah untuk menguji ketahanan server target terhadap beban tinggi, yang berpotensi menyebabkannya merespons dengan kesalahan seperti 503 Bad Gateway, 502 Bad Gateway, 504 Gateway Timeout, atau menjadi tidak responsif. Gunakan secara bertanggung jawab.
           </CardDescription>
@@ -21,7 +21,7 @@ export default function Home() {
         </CardContent>
       </Card>
       <footer className="mt-8 text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Meriam Permintaan. Dibuat oleh Tirta Sadewa.</p>
+        <p>&copy; {new Date().getFullYear()} Flooder L7. Dibuat oleh Tirta Sadewa.</p>
       </footer>
     </main>
   );

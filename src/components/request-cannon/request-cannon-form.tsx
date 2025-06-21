@@ -85,7 +85,7 @@ const getBaseMethod = (method: string): string => {
 };
 
 const MAX_HISTORY_ENTRIES = 5;
-const ATTACK_HISTORY_STORAGE_KEY = "requestCannonAttackHistory";
+const ATTACK_HISTORY_STORAGE_KEY = "flooderL7AttackHistory";
 
 export function RequestCannonForm() {
   const [isFlooding, setIsFlooding] = useState(false);
