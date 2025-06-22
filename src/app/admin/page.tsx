@@ -83,7 +83,7 @@ export default function AdminDashboardPage() {
   const [isAutoAttackEnabled, setIsAutoAttackEnabled] = useState(false);
   const [autoAttackTargetUrl, setAutoAttackTargetUrl] = useState("");
   const [autoAttackMethod, setAutoAttackMethod] = useState<typeof HTTP_METHODS_BASE[number]>("GET");
-  const [autoAttackProxyApiUrl, setAutoAttackProxyApiUrl] = useState("");
+  const [autoAttackProxyApiUrl, setAutoAttackProxyApiUrl] = useState("http://api.scrapestack.com/scrape?access_key=23eefd6d90e97a5daaba7e6e13d0947f&url=https://apple.com");
   const [autoAttackStatus, setAutoAttackStatus] = useState("Nonaktif");
   const [autoAttackLogs, setAutoAttackLogs] = useState<AutoAttackLogEntry[]>([]);
   const [isAttacking, setIsAttacking] = useState(false);
@@ -377,7 +377,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="auto-attack-proxy-api" className="flex items-center"><Globe className="mr-2 h-4 w-4" />URL API Proksi Otomatis (Wajib)</Label>
-                <Input id="auto-attack-proxy-api" placeholder="https://api.proxyscrape.com/v2/?request=getproxies&protocol=http" value={autoAttackProxyApiUrl} onChange={(e) => setAutoAttackProxyApiUrl(e.target.value)} disabled={isAutoAttackEnabled && isAttacking} />
+                <Input id="auto-attack-proxy-api" placeholder="http://api.scrapestack.com/scrape?access_key=..." value={autoAttackProxyApiUrl} onChange={(e) => setAutoAttackProxyApiUrl(e.target.value)} disabled={isAutoAttackEnabled && isAttacking} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="auto-attack-method" className="flex items-center"><ServerIcon className="mr-2 h-4 w-4" />Metode HTTP Otomatis</Label>
