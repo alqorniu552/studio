@@ -83,7 +83,7 @@ export default function AdminDashboardPage() {
   const [isAutoAttackEnabled, setIsAutoAttackEnabled] = useState(false);
   const [autoAttackTargetUrl, setAutoAttackTargetUrl] = useState("");
   const [autoAttackMethod, setAutoAttackMethod] = useState<typeof HTTP_METHODS_BASE[number]>("GET");
-  const [autoAttackProxyApiUrl, setAutoAttackProxyApiUrl] = useState("https://api.scraperapi.com/?api_key=ce6352d150bdad473a952c0165895c65&url=https%3A%2F%2Fhttpbin.org%2F");
+  const [autoAttackProxyApiUrl, setAutoAttackProxyApiUrl] = useState("");
   const [autoAttackStatus, setAutoAttackStatus] = useState("Nonaktif");
   const [autoAttackLogs, setAutoAttackLogs] = useState<AutoAttackLogEntry[]>([]);
   const [isAttacking, setIsAttacking] = useState(false);
@@ -377,7 +377,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="auto-attack-proxy-api" className="flex items-center"><Globe className="mr-2 h-4 w-4" />URL API Proksi Otomatis (Wajib)</Label>
-                <Input id="auto-attack-proxy-api" placeholder="https://api.scraperapi.com/?api_key=..." value={autoAttackProxyApiUrl} onChange={(e) => setAutoAttackProxyApiUrl(e.target.value)} disabled={isAutoAttackEnabled && isAttacking} />
+                <Input id="auto-attack-proxy-api" placeholder="https://api.proxyscrape.com/v2/?request=getproxies&protocol=http" value={autoAttackProxyApiUrl} onChange={(e) => setAutoAttackProxyApiUrl(e.target.value)} disabled={isAutoAttackEnabled && isAttacking} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="auto-attack-method" className="flex items-center"><ServerIcon className="mr-2 h-4 w-4" />Metode HTTP Otomatis</Label>
