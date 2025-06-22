@@ -94,7 +94,7 @@ export function RequestCannonForm() {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  const [proxyApiUrl, setProxyApiUrl] = useState<string>("http://api.scrapestack.com/scrape?access_key=23eefd6d90e97a5daaba7e6e13d0947f&url=https://apple.com");
+  const [proxyApiUrl, setProxyApiUrl] = useState<string>("https://api.proxyscrape.com/v2/?request=getproxies&protocol=http");
   const [isFetchingProxies, setIsFetchingProxies] = useState<boolean>(false);
   const [isCheckingProxies, setIsCheckingProxies] = useState<boolean>(false);
   const [currentAttackDuration, setCurrentAttackDuration] = useState<number | null>(null);
@@ -415,7 +415,7 @@ User-Agent: MyCustomAgent/1.0"
         <div className="space-y-2">
             <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-primary" />URL API Proksi (Opsional - Untuk Pembaruan Dinamis)</FormLabel>
             <Input
-                placeholder="http://api.scrapestack.com/scrape?access_key=..."
+                placeholder="https://api.proxyscrape.com/v2/?request=getproxies&protocol=http"
                 value={proxyApiUrl}
                 onChange={(e) => setProxyApiUrl(e.target.value)}
                 disabled={isAnyOperationActive}
